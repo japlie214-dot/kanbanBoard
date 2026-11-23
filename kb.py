@@ -361,28 +361,33 @@ def validate_todo_tree(nodes: list[dict], for_verify: bool = False, for_inprogre
 # ---------------------------------------------------------------------------
 
 def check_required_sections(body: str, sections: set[str]) -> list[str]:
-    """Return list of missing or placeholder sections."""
+    """Return list of missing or placeholder sections with descriptive details."""
     missing = []
-    template_starts = (
-        'describe', 'what', 'exact commands', 'observable',
-        '- allowed files', '- [ ] positive case', 'pytest ...'
+    placeholder_exact_starts = (
+        'describe the observable result',
+        'exact commands and expected output',
+        'pytest tests/test_feature.py'
     )
     for s in sections:
         pattern = re.compile(r'##\s+' + re.escape(s) + r'\s*\n(.*?)(?=\n##|\Z)', re.S)
         m = pattern.search(body)
         if not m:
-            missing.append(s)
+            missing.append(f"{s} (section missing)")
             continue
         content = m.group(1).strip()
         if not content:
-            missing.append(s)
+            missing.append(f"{s} (section is empty)")
             continue
         first_line = content.splitlines()[0].strip().lower()
-        if any(first_line.startswith(prefix) for prefix in template_starts):
-            missing.append(s)
+        if any(first_line.startswith(prefix) for prefix in placeholder_exact_starts):
+            missing.append(f"{s} (contains unedited placeholder text)")
             continue
-        if len(content) < 15:
-            missing.append(s)
+        if s == "Scope" and ("src/..." in content or "`...`" in content):
+            missing.append("Scope (contains unedited placeholder 'src/...')")
+            continue
+        if len(content) < 10:
+            missing.append(f"{s} (content too brief, < 10 chars)")
+            continue
     return missing
 
 
