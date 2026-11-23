@@ -235,6 +235,12 @@ class TestKanbanCore(unittest.TestCase):
             mcp_server.handle_tool_call(3, "kanban_board", {"view": "lint"}, self.board)
             self.assertIn("Lint:", responses[-1]["text"])
 
+            # Test lint on empty non-existent board does not fail
+            empty_board = self.test_dir / "empty_board"
+            mcp_server.handle_tool_call(31, "kanban_board", {"view": "lint"}, empty_board)
+            self.assertFalse(responses[-1]["is_error"])
+            self.assertIn("empty", responses[-1]["text"].lower())
+
             # 2. kanban_ticket (create and show)
             mcp_server.handle_tool_call(4, "kanban_ticket", {"ref": "demo/feature/T010", "title": "New Tool Ticket"}, self.board)
             self.assertIn("Created ticket", responses[-1]["text"])

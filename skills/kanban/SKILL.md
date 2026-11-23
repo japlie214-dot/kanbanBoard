@@ -28,6 +28,7 @@ Discover projects, charters, epics, docs (`docs: []`), and all active tickets in
 ```python
 kanban_board(view="overview")
 ```
+*Note: If the board is fresh/empty (returns `{"projects": []}`), proceed directly to step 2 to create the first ticket. `view="lint"` is reserved for auditing existing tickets.*
 
 ### 2. Creating a Ticket (`kanban_ticket`)
 ```python

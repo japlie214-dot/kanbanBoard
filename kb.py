@@ -1246,12 +1246,23 @@ def api_lint(board: Path) -> dict:
     errors = []
     warnings = []
     if not board.exists():
-        return {"errors": ["Board root directory does not exist"], "warnings": []}
+        board.mkdir(parents=True, exist_ok=True)
+        return {
+            "errors": [],
+            "warnings": ["Board directory ('board/') was just initialized and is empty. Use kanban_ticket to create your first ticket."]
+        }
 
     all_tickets = set()
     ticket_depends = {}
 
-    for p_dir in sorted(board.iterdir()):
+    project_dirs = [p for p in sorted(board.iterdir()) if p.is_dir() and not p.name.startswith('.')]
+    if not project_dirs:
+        return {
+            "errors": [],
+            "warnings": ["Board directory is empty (no projects found). Use kanban_ticket to create your first ticket or kanban_doc to write a project charter."]
+        }
+
+    for p_dir in project_dirs:
         if not p_dir.is_dir() or p_dir.name.startswith('.'):
             continue
         if not (p_dir / "project.md").exists():
