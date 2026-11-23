@@ -1,8 +1,8 @@
-# Safe Attachments & Architectural Documentation Engine
+# Safe Attachments & Living Architectural Documentation Engine
 
-Complex software features often require referencing external technical documents, database schemas, network logs, architectural decision records (ADRs), and visual mockups. 
+Complex software systems require referencing external technical documents, database schemas, network logs, architectural decision records (ADRs), and visual mockups. 
 
-KanbanBoard integrates a secure **Attachment Subsystem** and an **Architectural Documentation Engine** directly into the ticket ecosystem.
+KanbanBoard integrates a secure **Attachment Subsystem** and a **Living Architectural Documentation Engine** (`docs: []`) directly into the ticket ecosystem.
 
 ---
 
@@ -43,59 +43,58 @@ kanban_update(
 
 ---
 
-## 2. Architectural Documentation (`docs: []`) Engine
+## 2. Living Architectural Documentation (`docs: []`) Engine
 
-Every project and epic within KanbanBoard can define architectural charters and design documents:
+Documentation in KanbanBoard is **executable architecture context** shared across multi-agent runtimes (Claude Code, Codex, Antigravity).
 
 ```
 board/
 ├── kanban-system/
 │   ├── project.md             # Project Charter
+│   ├── adr-001-caching.md     # Architecture Decision Record
 │   └── core/
 │       ├── epic.md            # Epic Architectural Specification
+│       ├── schema.md          # Subsystem Schema Specification
 │       └── T001.md            # Ticket
 ```
 
-### 2.1 Project Charters (`project.md`)
-The project charter defines:
-- **Vision & Business Objective**: Why does this project exist?
-- **Architecture Overview**: System components and dependencies.
-- **Tech Stack & Standards**: Coding conventions, required linting rules, test coverage targets.
-- **Security & Compliance Constraints**: Blast radius policies.
+### 2.1 The 5-Pillar Proactive Documentation Protocol
 
-### 2.2 Epic Specifications (`epic.md`)
-The epic specification defines:
-- **Scope & Out-of-Scope Boundaries**: What belongs to this epic vs. future epics.
-- **API Contracts**: REST, gRPC, or MCP interfaces being introduced.
-- **Acceptance Milestones**: Key delivery criteria.
+1. **Pre-Flight Reading ("Read Before Plan")**:
+   Agents MUST inspect `project.md` and `epic.md` before creating or claiming tickets:
+   ```python
+   charter = kanban_doc(action="read", project="kanban-system")
+   epic_spec = kanban_doc(action="read", project="kanban-system", epic="core")
+   ```
 
-### 2.3 Automatic Ticket Indexing (`docs: []`)
-When a ticket is created or inspected, the engine automatically populates its `docs: []` frontmatter list with the paths to its governing charters:
+2. **Living Architecture Stewardship ("Evolve as You Build")**:
+   - `project.md` defines the global mission, tech stack, constraints, and dependencies. Update it when global dependencies, build scripts, or environment variables change.
+   - `epic.md` defines subsystem scope, API contracts, interfaces, and acceptance milestones. Update it whenever new interfaces, commands, or data models are added.
+
+3. **Supplementary Technical Knowledge Base (Beyond project.md & epic.md)**:
+   Agents can create and maintain arbitrary supplementary markdown documents:
+   - **ADRs (Architecture Decision Records)**: `kanban_doc(action="write", project="...", name="adr-002-jwt", content="...")`
+   - **Data Schemas & Protocols**: `kanban_doc(action="write", project="...", epic="...", name="schema-v2", content="...")`
+   - **API Specs & Contracts**: `kanban_doc(action="write", project="...", epic="...", name="endpoints", content="...")`
+   - **Troubleshooting & Runbooks**: `kanban_doc(action="write", project="...", name="runbook", content="...")`
+   - **Performance Benchmarks**: `kanban_doc(action="write", project="...", epic="...", name="benchmarks", content="...")`
+
+4. **Todo Tree Documentation Node**:
+   Tickets modifying public interfaces must include a living documentation step in their Todo Tree DAG:
+   ```markdown
+   - [ ] 3A. Living documentation & architecture sync (update epic.md/ADR)
+   ```
+
+5. **QA Documentation Audit Gate**:
+   The independent `kb-qa` auditor inspects documentation synchronization during Tier 2 (The Surrounding Forest) ecosystem audit. Tickets failing to update charters or author specs when contracts changed are rejected back to `in-progress`.
+
+### 2.2 Automatic Indexing & Dashboard Discovery
+When documents are added to a project or epic, the dashboard and `kanban_board(view="overview")` automatically list them:
 ```yaml
 docs:
   - kanban-system/project.md
+  - kanban-system/adr-001-caching.md
   - kanban-system/core/epic.md
+  - kanban-system/core/schema.md
 ```
-
-### 2.4 Unified Documentation API (`kanban_doc`)
-Agents read and author documentation seamlessly using the `kanban_doc` tool:
-
-```python
-# Read project charter
-charter = kanban_doc(action="read", project="kanban-system")
-
-# Read epic specification
-epic_spec = kanban_doc(action="read", project="kanban-system", epic="core")
-
-# Author or update architectural documentation
-kanban_doc(
-    action="write",
-    project="kanban-system",
-    epic="core",
-    name="data-flow.md",
-    content="# Data Flow Specification\n..."
-)
-```
-
-### 2.5 Board Overview Discovery
-When an agent calls `kanban_board(view='overview')`, the returned payload includes not just tickets, but also the full index of all project charters, epic specifications, and supplementary docs. This provides an agent with complete architectural context in a single tool call.
+Every active agent can query, read, and cross-reference these documents without leaving the Kanban toolchain.
