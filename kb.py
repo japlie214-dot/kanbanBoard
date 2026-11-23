@@ -67,31 +67,72 @@ PRIVATE_SUFFIXES = (
 # Path Resolution & Locking
 # ---------------------------------------------------------------------------
 
+def is_plugin_internal_path(path: Path) -> bool:
+    """Check if a path is inside a plugin installation/cache directory."""
+    s = str(path).replace("\\", "/").lower()
+    return any(marker in s for marker in (
+        "/plugins/kanban-board",
+        "/.gemini/config/plugins",
+        "/claude/rpm",
+        "/appdata/roaming/claude/plugins",
+        "/.claude/plugins",
+        "/node_modules",
+    ))
+
+
+def board_root() -> Path:
+    """Resolve the canonical board directory with clean precedence:
+    1. Explicit environment variable: KANBAN_BOARD_ROOT
+    2. Explicit workspace env var: KANBAN_WORKSPACE_ROOT / 'board'
+    3. Active project workspace: If current working directory or any parent has a 'board/' directory
+    4. Active git repository: If current working directory or any parent has a '.git' directory
+    5. Universal user data directory: ~/.kanban/board (works on every machine, standalone plugin, zero clone required)
+    """
+    env_board = os.environ.get("KANBAN_BOARD_ROOT")
+    if env_board:
+        return Path(env_board).resolve()
+
+    env_ws = os.environ.get("KANBAN_WORKSPACE_ROOT")
+    if env_ws:
+        return Path(env_ws).resolve() / BOARD_DIR
+
+    cwd = Path.cwd()
+    # 3. Check for existing project board/ directory (excluding plugin caches)
+    for p in [cwd] + list(cwd.parents):
+        b = p / BOARD_DIR
+        if b.is_dir() and not is_plugin_internal_path(p):
+            return b
+
+    # 4. Check for active git repository root
+    for p in [cwd] + list(cwd.parents):
+        if (p / ".git").is_dir() and not is_plugin_internal_path(p):
+            return p / BOARD_DIR
+
+    # 5. Universal user data directory: ~/.kanban/board
+    # Completely independent of any repository clone; works for standalone .plugin installs.
+    user_board = Path.home() / ".kanban" / BOARD_DIR
+    try:
+        user_board.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return user_board
+
+
 def workspace_root() -> Path:
     env_ws = os.environ.get("KANBAN_WORKSPACE_ROOT")
     if env_ws:
         return Path(env_ws).resolve()
-    env_board = os.environ.get("KANBAN_BOARD_ROOT")
-    if env_board:
-        p = Path(env_board).resolve()
-        return p.parent if p.name == BOARD_DIR else p
-    cwd = Path.cwd()
-    for p in [cwd] + list(cwd.parents):
-        if (p / ".git").exists() or (p / BOARD_DIR).exists():
-            return p
-    # Fallback: If running inside a plugin cache/install directory (e.g. Claude RPM or Gemini plugin),
-    # route to the canonical user board directory if it exists, rather than writing into plugin cache.
-    canonical_board = Path(r"C:\Projects\kanbanBoard\board")
-    if canonical_board.exists():
-        return canonical_board.parent
-    return Path(__file__).parent.resolve()
 
+    b_root = board_root()
+    # If board_root is inside user home ~/.kanban/board, workspace root is cwd if cwd has git, else ~/.kanban
+    if b_root == Path.home() / ".kanban" / BOARD_DIR:
+        cwd = Path.cwd()
+        for p in [cwd] + list(cwd.parents):
+            if (p / ".git").is_dir() and not is_plugin_internal_path(p):
+                return p
+        return b_root.parent
 
-def board_root() -> Path:
-    env_board = os.environ.get("KANBAN_BOARD_ROOT")
-    if env_board:
-        return Path(env_board).resolve()
-    return workspace_root() / BOARD_DIR
+    return b_root.parent if b_root.name == BOARD_DIR else b_root
 
 
 @contextlib.contextmanager

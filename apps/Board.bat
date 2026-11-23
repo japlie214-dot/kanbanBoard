@@ -5,6 +5,8 @@ echo Starting Kanban Board Viewer...
 set "BOARD_DIR="
 if defined KANBAN_BOARD_ROOT (
     set "BOARD_DIR=%KANBAN_BOARD_ROOT%"
+) else if exist "%USERPROFILE%\.kanban\board" (
+    set "BOARD_DIR=%USERPROFILE%\.kanban\board"
 ) else if exist "%~dp0..\board" (
     set "BOARD_DIR=%~dp0..\board"
 )
