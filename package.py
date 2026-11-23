@@ -113,9 +113,8 @@ def main():
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Output kanbanBoard.plugin and kanban-board.plugin (for backward compatibility)
+    # Output kanbanBoard.plugin only
     make_plugin_archive(DIST_DIR / "kanbanBoard.plugin", files)
-    make_plugin_archive(DIST_DIR / "kanban-board.plugin", files)
     
     print("\nPackage build complete. Only .plugin archives generated in dist/.")
 
