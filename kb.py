@@ -79,6 +79,11 @@ def workspace_root() -> Path:
     for p in [cwd] + list(cwd.parents):
         if (p / ".git").exists() or (p / BOARD_DIR).exists():
             return p
+    # Fallback: If running inside a plugin cache/install directory (e.g. Claude RPM or Gemini plugin),
+    # route to the canonical user board directory if it exists, rather than writing into plugin cache.
+    canonical_board = Path(r"C:\Projects\kanbanBoard\board")
+    if canonical_board.exists():
+        return canonical_board.parent
     return Path(__file__).parent.resolve()
 
 
