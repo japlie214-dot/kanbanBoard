@@ -1,200 +1,80 @@
-# Executable Todo Tree Grammar & Path Verification
+# Executable Todo Tree Grammar & True DAG Verification
 
-The **Todo Tree** is KanbanBoard's core mechanism for structured, verifiable planning. It bridges high-level ticket requirements with low-level step execution by organizing tasks into a hierarchical Directed Acyclic Graph (DAG) using standard Markdown list syntax.
+The **Todo Tree** is KanbanBoard's core mechanism for structured, verifiable planning and execution. It organizes tasks into a true **Directed Acyclic Graph (DAG)** using standard Markdown list syntax, supporting parallel execution lanes, conditional `if/else` forks, cross-branch merges, and machine-verifiable execution proofs.
 
 ---
 
 ## 1. Syntax & Grammar Specification
 
-The Todo Tree lives inside the ticket markdown under the header `## Plan (Todo Tree)`. It supports arbitrary nesting, alternative execution branches, and designated acceptance criteria.
+The Todo Tree lives inside the ticket markdown under the header `## Plan (Todo Tree)`.
 
-### 1.1 Formal Grammar (EBNF)
-```ebnf
-TodoTree       ::= Header Item+
-Header         ::= "## Plan (Todo Tree)" Newline
-Item           ::= Indent Checkbox Label (Tag)? Newline
-Indent         ::= ("  ")* | ("\t")*
-Checkbox       ::= "- [ ] " | "- [x] " | "- [X] "
-Label          ::= TaskID? Text
-TaskID         ::= [0-9]+ ("." [0-9]+)* | [0-9]+ [A-Za-z]+
-Tag            ::= "[ACCEPTANCE]"
-```
+### 1.1 Grammar & Tags
+- **Checkboxes:**
+  - `- [ ]`: Pending task.
+  - `- [x]`: Executed task (requires recorded proof in `## Execution Log`).
+  - `- [-]`: Skipped task (used for untaken `if/else` branches or skipped optional branches).
+- **Node IDs:**
+  - Placed at the start of the item (e.g., `A1`, `B2`, `D4`).
+- **Tags:**
+  - `[START]`: Marks workflow entry point(s). Every path begins at a start node.
+  - `[lane:<name>]`: Identifies execution swimlanes (e.g., `[lane:A]`, `[lane:D]`).
+  - `[after:<expr>]`: Declares prerequisites:
+    - `[after:A1]`: Single prerequisite.
+    - `[after:A2,B3]`: AND join (must wait for both `A2` and `B3` to be done).
+    - `[after:B5|C5]`: XOR / OR join (satisfied if either `B5` or `C5` is done).
+    - `[after:A2,B3?]`: Conditional/optional merge (waits for `B3` if taken; does not block if `B3` was skipped).
+  - `[when:if(cond):fork]`: Declares conditional branch `if` arm.
+  - `[when:else(cond):fork]`: Declares conditional branch `else` arm.
+  - `[parallel]`: Marks independent parallel lane (runs concurrently with main branch).
+  - `[optional]`: Marks optional branch (may be skipped cleanly via `- [-]`).
+  - `[ACCEPTANCE:MANDATORY]`: Mandatory acceptance checkpoint. **ALL** active mandatory acceptances must be satisfied and proven before moving to `verify`.
+  - `[ACCEPTANCE:OPTIONAL]`: Optional acceptance checkpoint. Must be either fully completed or cleanly skipped.
 
-### 1.2 Example Tree Structure
+### 1.2 Example 5-Lane DAG (A/B/C/D/E)
 ```markdown
 ## Plan (Todo Tree)
-- [x] 1. Architecture & Design
-  - [x] 1A. Define schema contracts
-  - [ ] 1B. Alternative schema (Protobuf fallback)
-- [x] 2. Core Implementation
-  - [x] 2A. In-memory storage engine
-    - [x] 2A.1 Thread-safe read/write locks
-    - [x] 2A.2 Unit test coverage [ACCEPTANCE]
-  - [ ] 2B. SQLite storage engine (Unused branch)
-    - [ ] 2B.1 Schema migrations
-    - [ ] 2B.2 DB integration test [ACCEPTANCE]
-```
-
-Notice that **Branch 1B** and **Branch 2B** were not selected during execution. That is fully permissible: the tree is fluid and allows branching alternatives. However, the path along **Branch 2A** is complete all the way from Root (1, 2) down to the leaf tagged `[ACCEPTANCE]`.
-
----
-
-## 2. Stack-Based Parser Implementation
-
-The parser operates by tracking indentation levels on a stack to dynamically reconstruct the tree's parent-child graph without external libraries.
-
-```python
-import re
-from dataclasses import dataclass, field
-from typing import List, Optional
-
-@dataclass
-class TodoNode:
-    id: str
-    text: str
-    checked: bool
-    is_acceptance: bool
-    depth: int
-    parent: Optional['TodoNode'] = None
-    children: List['TodoNode'] = field(default_factory=list)
-
-TODO_LINE_REGEX = re.compile(
-    r'^(?P<indent>\s*)-\s*\[(?P<checked>[ xX])\]\s*(?P<text>.*?)(?P<tag>\[ACCEPTANCE\])?\s*$'
-)
-
-def parse_todo_tree(markdown_body: str) -> List[TodoNode]:
-    in_plan = False
-    root_nodes: List[TodoNode] = []
-    stack: List[TodoNode] = []  # Stack of (ancestors)
-
-    for line in markdown_body.splitlines():
-        if line.strip().startswith("## Plan (Todo Tree)"):
-            in_plan = True
-            continue
-        elif in_plan and line.startswith("## "):
-            break  # Reached next section
-
-        if not in_plan or not line.strip():
-            continue
-
-        match = TODO_LINE_REGEX.match(line)
-        if not match:
-            continue
-
-        indent_len = len(match.group("indent").replace("\t", "    "))
-        depth = indent_len // 2  # Standard 2-space indent
-        checked = match.group("checked").lower() == "x"
-        raw_text = match.group("text").strip()
-        is_acceptance = bool(match.group("tag"))
-
-        node = TodoNode(
-            id=raw_text.split(" ")[0] if raw_text else "",
-            text=raw_text,
-            checked=checked,
-            is_acceptance=is_acceptance,
-            depth=depth
-        )
-
-        # Rebalance stack to find correct parent
-        while stack and stack[-1].depth >= depth:
-            stack.pop()
-
-        if stack:
-            node.parent = stack[-1]
-            stack[-1].children.append(node)
-        else:
-            root_nodes.append(node)
-
-        stack.append(node)
-
-    return root_nodes
+- [ ] A1 [START] [lane:A] Initialize workflow & evaluate condition 1
+- [ ] A2 [lane:A] [after:A1] Happy-path step 2
+- [ ] B1 [lane:B] [after:A1] [when:if(cond1):fork1] Conditional branch B step 1
+- [ ] B2 [lane:B] [after:B1] Conditional branch B step 2
+- [ ] B3 [lane:B] [after:B2] Conditional branch B step 3
+- [ ] C1 [lane:C] [after:A1] [when:else(cond1):fork1] Conditional branch C step 1
+- [ ] C2 [lane:C] [after:C1] [ACCEPTANCE:MANDATORY] Early-exit acceptance for branch C
+- [ ] A3 [lane:A] [after:A2,B3?] Merge point waiting on A2 and (if taken) B3
+- [ ] A4 [lane:A] [after:A3] Decision & fan-out checkpoint
+- [ ] B4 [lane:B] [after:A4] [when:if(cond2):fork2] Branch B second phase
+- [ ] B5 [lane:B] [after:B4] Branch B second phase complete
+- [ ] C4 [lane:C] [after:A4] [when:else(cond2):fork2] Branch C second phase
+- [ ] C5 [lane:C] [after:C4] Branch C second phase complete
+- [ ] A5 [lane:A] [after:A4,B5|C5] Converge after A4 and whichever of B5/C5 ran
+- [ ] A6 [lane:A] [after:A5] [ACCEPTANCE:MANDATORY] Happy-path final acceptance
+- [ ] D1 [lane:D] [after:A1] [parallel] Parallel lane D start (runs with A)
+- [ ] D2 [lane:D] [after:D1] Parallel lane D step 2
+- [ ] D3 [lane:D] [after:D2] Parallel lane D step 3
+- [ ] D4 [lane:D] [after:D3] [ACCEPTANCE:MANDATORY] Parallel lane D mandatory acceptance
+- [ ] E1 [lane:E] [after:A4] [optional] Optional branch E step 1 (independent of D)
+- [ ] E2 [lane:E] [after:E1] [ACCEPTANCE:OPTIONAL] Optional branch E acceptance
 ```
 
 ---
 
-## 3. Continuous Path Verification Algorithm
+## 2. Process Verification & Append-Only Execution Log
 
-To satisfy **Gate 3 (Unbroken DAG Path Gate)** before moving a ticket to `verify`, the engine must find at least one valid path from a root node to an `[ACCEPTANCE]` node where **every single node along the path is checked** (`checked == True`).
-
-```mermaid
-flowchart TD
-    R1["[x] 1. Setup"] --> C1["[x] 1.1 Config"]
-    C1 --> A1["[x] 1.1.1 Config Validated [ACCEPTANCE]"]
-    
-    R2["[x] 2. Implementation"] --> B1["[x] 2A. Happy Path"]
-    R2 --> B2["[ ] 2B. Fallback Path"]
-    
-    B1 --> L1["[x] 2A.1 Core Engine"]
-    L1 --> ACC["[x] 2A.2 Unit Tests Pass [ACCEPTANCE]"]
-    
-    B2 --> ACC2["[ ] 2B.1 Fallback Tests [ACCEPTANCE]"]
-
-    style A1 fill:#bbf,stroke:#333,stroke-width:2px
-    style ACC fill:#bbf,stroke:#333,stroke-width:2px
-    style ACC2 fill:#ddd,stroke:#999,stroke-width:1px
-```
-
-### 3.1 Verification Logic (Depth-First Search)
-
-```python
-def verify_unbroken_path(root_nodes: List[TodoNode]) -> bool:
-    """Returns True if there is at least one unbroken checked path to an [ACCEPTANCE] leaf."""
-    acceptance_leaves: List[TodoNode] = []
-
-    def collect_acceptance(node: TodoNode):
-        if node.is_acceptance:
-            acceptance_leaves.append(node)
-        for child in node.children:
-            collect_acceptance(child)
-
-    for root in root_nodes:
-        collect_acceptance(root)
-
-    if not acceptance_leaves:
-        raise ValidationError("No [ACCEPTANCE] leaf nodes defined in Todo Tree.")
-
-    # Check each acceptance leaf: walk upwards to the root
-    valid_paths = []
-    for leaf in acceptance_leaves:
-        if not leaf.checked:
-            continue
-
-        # Traverse ancestry to root
-        curr = leaf
-        broken = False
-        path = []
-        while curr is not None:
-            path.append(curr)
-            if not curr.checked:
-                broken = True
-                break
-            curr = curr.parent
-
-        if not broken:
-            valid_paths.append(list(reversed(path)))
-
-    if not valid_paths:
-        raise ValidationError(
-            "Gate 3 Failed: No unbroken path of checked tasks leads to an [ACCEPTANCE] criterion. "
-            "Ensure that an [ACCEPTANCE] task is checked AND all of its parent tasks are also checked."
-        )
-
-    return True
-```
+Checkpoints are NOT self-declared honors-system booleans. When checking off nodes via `kanban_update`:
+1. **Topological Order**: Predecessors declared in `[after:...]` must already be done.
+2. **Proof Required**: Callers must provide `node_proofs: {nid: "evidence..."}` containing commands run, output, or artifact paths.
+3. **Execution Log**: The engine automatically writes structured audit records to `## Execution Log`:
+   ```markdown
+   ## Execution Log
+   - [2026-11-23 07:00 UTC] [DONE] A1 | proof: Read epic.md and initialized schema
+   - [2026-11-23 07:05 UTC] [SKIP] C1 | reason: cond1 evaluated true; took B branch
+   - [2026-11-23 07:10 UTC] [DONE] A2 | proof: pytest tests/test_core.py -> 10 passed
+   ```
 
 ---
 
-## 4. Checking Off Tasks via MCP & CLI
+## 3. Strict Verification Gates
 
-Agents update the Todo Tree dynamically during execution using `kanban_update`:
-
-```python
-# MCP call checking off tasks 1A, 2A, and 2A.2
-kanban_update(
-    ref="kanban-system/core/T001",
-    checked_nodes=["1A", "2A", "2A.2"],
-    notes="Completed in-memory storage engine and unit tests"
-)
-```
-
-The engine matches target nodes by exact text, task identifier (e.g. `1A`), or line index, flips `- [ ]` to `- [x]`, and automatically updates the sliding lease timestamp.
+- **Gate 1 (`backlog -> in-progress`)**: Validates acyclic DAG topology, `[START]` root, terminal leaves ending at acceptance checkpoints, and ensures no acceptance checkpoint is pre-checked.
+- **Gate 3 (`in-progress -> verify`)**: Validates that **all** active mandatory acceptances are completed (`- [x]`), all active paths trace back continuously to `[START]`, all intermediate checkpoints have recorded proofs in `## Execution Log`, and optional branches are either completed or cleanly marked `- [-]`.
+- **Gate 5 (`kb-qa` Certification)**: `kb-qa` executes **Tier 0 Process Audit**, verifying that every checkpoint was executed in order and citing every active mandatory acceptance ID in the QA evidence report before certifying to `done`.

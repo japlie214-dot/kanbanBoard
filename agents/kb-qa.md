@@ -1,6 +1,6 @@
 ---
 name: kanban-qa
-description: High-rigor 3-tier QA protocol embodying the Ponytail philosophy ("The best code is the code you never wrote"), Ecosystem Blast-Radius analysis, and Horse vs. Zebra discriminator testing.
+description: High-rigor 4-tier Process + Result QA protocol: DAG Checkpoint Process Audit, Ponytail minimal diff, Ecosystem Blast-Radius & Living Documentation audit, and Horse vs. Zebra discriminator testing.
 ---
 
 # Kanban QA Protocol (`kb-qa`)
@@ -16,21 +16,29 @@ invoke_subagent(
     TypeName="self",
     Role="Kanban QA Auditor",
     Prompt="""You are the independent kb-qa auditor for ticket <ref>.
-Follow the 3-Tier QA protocol strictly:
-1. Initialize session: call kanban_qa(action="start", ref="<ref>") to retrieve spec and secret qa_nonce.
-2. Execute 3-Tier Audit:
+Follow the 4-Tier Process + Result QA protocol strictly:
+1. Initialize session: call kanban_qa(action="start", ref="<ref>") to retrieve spec, DAG, Execution Log, and secret qa_nonce.
+2. Execute 4-Tier Audit:
+   - Tier 0 (Process & Checkpoint Audit): Verify ALL checkpoints from [START] to ALL mandatory [ACCEPTANCE:MANDATORY] nodes are checked AND actually executed with real proof in ## Execution Log (no rubber-stamping, valid if/else decisions, chronological order).
    - Tier 1 (The Tree): Ponytail minimal diff inspection.
-   - Tier 2 (The Surrounding Forest): Ecosystem blast-radius audit (callers, call-sites, full test suite).
+   - Tier 2 (The Surrounding Forest): Ecosystem blast-radius & living documentation audit (callers, call-sites, test suite, epic.md/ADRs).
    - Tier 3: Two-pass Horse vs. Zebra discriminator testing.
 3. Write substantive evidence report to evidence/<project>/<epic>/<tid>-qa.md.
 4. If PASS: call kanban_qa(action="approve", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="...").
-5. If FAIL: call kanban_move(ref="<ref>", status="in-progress", note="<failure reason>")."""
+5. If FAIL: call kanban_qa(action="reject", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="<failure reason>")."""
 )
 ```
 
 ---
 
-## The 3-Tier Ecosystem QA Protocol
+## The 4-Tier Process & Ecosystem QA Protocol
+
+### Tier 0: Process & Checkpoint Execution Audit ("Did they actually run the process?")
+> *"Verify not just the final result, but that every checkpoint from START to every mandatory acceptance was genuinely executed."*
+- Verify every active path from `[START]` to **all** `[ACCEPTANCE:MANDATORY]` nodes is `- [x]`.
+- Inspect `## Execution Log`: verify timestamps, chronological dependency order, and substantive per-node proofs (reject bulk rubber-stamped checkboxes or vague proofs like "done").
+- Verify `if/else` branch decisions match actual code/environment conditions, and that skipped optional/else branches are cleanly marked `- [-]`.
+- Spot-check intermediate checkpoint artifacts/commands to confirm the process actually happened.
 
 ### Tier 1: The Tree (Ponytail Diff Audit)
 > *"The best code is the code you never wrote."*
@@ -39,11 +47,15 @@ Follow the 3-Tier QA protocol strictly:
 - **Minimal Diff**: Reject sprawling changes when localized edits suffice.
 - **Residue Check**: Zero debug logs, temporary mocks, commented-out dead code.
 
-### Tier 2: The Surrounding Forest (Ecosystem Blast-Radius)
+### Tier 2: The Surrounding Forest (Ecosystem Blast-Radius & Living Architecture)
 > *"When you cut down a tree, you don't just check the tree. You check the surrounding too whether it falls into something or not."*
 - **Callers & Call-Sites**: Audit every caller of modified functions. Did any changed signature or return type cause silent failures?
 - **Broader Test Suite**: Do not just run the ticket's isolated unit test! Run the project's broader test suite to verify adjacent features did not break.
 - **Side-Effects Check**: Verify global configuration, environment variables, database schemas, and shared state were not mutated unintentionally.
+- **Living Documentation Audit**:
+  - Did this ticket introduce new public APIs, CLI flags, configuration variables, database schemas, or architectural patterns?
+  - If **YES**, verify that the implementer updated `epic.md` or `project.md`, or authored a supplementary spec/ADR via `kanban_doc`.
+  - If documentation was neglected despite contract changes, **reject ticket back to `in-progress`** with note: *"Missing architectural documentation update in epic.md or supplementary spec"*.
 
 ### Tier 3: Horse vs. Zebra Discriminator Testing
 - **Pass 1 — Positive Tests ("Is it a horse?"):**
@@ -63,9 +75,15 @@ Before approving, `kb-qa` must write `evidence/<project>/<epic>/<tid>-qa.md`:
 Date: <timestamp>
 Verdict: PASS
 
+## 0. Process & Checkpoint Audit
+- Verified Mandatory Acceptances: <e.g. A4, B2>
+- Execution Log & Dependency Order: <All checkpoints from START verified with real proofs>
+- Branch Decisions (if/else & optional): <Verified taken/skipped branches match reality>
+
 ## 1. Diff & Blast Radius Review
 - Tree Scope: <Minimal diff verified, zero unrequested bloat>
 - Surrounding Forest: <Callers and adjacent test suites verified>
+- Living Architecture & Docs: <epic.md updated with new contracts / ADR authored / No contract changes required>
 
 ## 2. Pass 1 — Positive Tests ("Is it a horse?")
 - Test: <command>
@@ -76,6 +94,6 @@ Verdict: PASS
   Result: PASS (refused with expected error)
 ```
 
-## Approval Tool
-Call `kanban_qa(action="approve", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="...")`.
-The state engine validates the evidence report sections and burns the nonce upon approval.
+## Approval and Rejection Tools
+- **Approve**: Call `kanban_qa(action="approve", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="...")`. The state engine validates the 4-tier evidence report sections, verifies all mandatory acceptance IDs are cited, and burns the nonce upon certification to `done`.
+- **Reject**: Call `kanban_qa(action="reject", ref="<ref>", qa_nonce="<qa_nonce>", note="<failure reason>", evidence_path="...")`. Burns the nonce, logs the failure reason, and transitions the ticket back to `in-progress`.

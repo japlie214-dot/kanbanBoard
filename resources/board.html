@@ -85,10 +85,20 @@ body.has-detail main{padding-bottom:min(55vh, 550px)}
 .todo-item.indent-2{margin-left:32px}
 .todo-item.indent-3{margin-left:46px}
 .todo-done{color:var(--muted);text-decoration:line-through}
-.todo-done .badge-acc,.todo-done .badge-chosen{text-decoration:none}
+.todo-done .badge-acc,.todo-done .badge-chosen,.todo-done .badge-start,.todo-done .badge-acc-mandatory,.todo-done .badge-acc-optional{text-decoration:none}
+.todo-skipped{color:var(--muted);text-decoration:line-through;opacity:.7}
+.todo-skipped .todo-check{color:var(--muted);font-weight:normal}
 .todo-check{font-weight:bold;font-size:12px;color:var(--s-done)}
 .todo-open .todo-check{color:var(--muted)}
 .badge-acc{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);border:1px solid var(--warn);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.badge-acc-mandatory{background:color-mix(in srgb,var(--warn) 25%,transparent);color:var(--warn);border:1px solid var(--warn);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.badge-acc-optional{background:color-mix(in srgb,var(--s-done) 20%,transparent);color:var(--s-done);border:1px solid var(--s-done);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.badge-start{background:color-mix(in srgb,var(--proj) 25%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.badge-lane{background:color-mix(in srgb,var(--epic) 20%,transparent);color:var(--epic);border:1px solid var(--epic);padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700}
+.badge-after{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--text);border:1px solid var(--line);padding:1px 4px;border-radius:3px;font-size:9px;font-family:ui-monospace,monospace}
+.badge-when{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);border:1px solid var(--accent);padding:1px 4px;border-radius:3px;font-size:9px}
+.badge-parallel{background:color-mix(in srgb,var(--proj) 15%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 4px;border-radius:3px;font-size:9px}
+.badge-optional{background:color-mix(in srgb,var(--s-done) 15%,transparent);color:var(--s-done);border:1px solid var(--s-done);padding:1px 4px;border-radius:3px;font-size:9px}
 .badge-chosen{background:color-mix(in srgb,var(--proj) 20%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
 .code-block{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:8px 12px;margin:6px 0;font:11px/1.4 ui-monospace,Consolas,monospace;overflow-x:auto}
 .ticket-body-raw{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 16px;border:none;background:transparent;font:12px/1.45 ui-monospace,Consolas,monospace;margin:0;flex:1;overflow:auto}
@@ -237,16 +247,28 @@ function renderMarkdownBody(text) {
       continue;
     }
 
-    const todoMatch = line.match(/^(\s*)-\s*\[([ xX])\]\s*(.*)$/);
+    const todoMatch = line.match(/^(\s*)-\s*\[([ xX-])\]\s*(.*)$/);
     if (todoMatch) {
       const indent = Math.floor(todoMatch[1].length / 2);
-      const isChecked = todoMatch[2].toLowerCase() === "x";
+      const mark = todoMatch[2].toLowerCase();
+      const isChecked = mark === "x";
+      const isSkipped = mark === "-";
       let taskText = escapeHtml(todoMatch[3]);
-      taskText = taskText.replace(/\[ACCEPTANCE\]/g, '<span class="badge-acc">[ACCEPTANCE]</span>');
-      taskText = taskText.replace(/\[CHOSEN\]/g, '<span class="badge-chosen">[CHOSEN]</span>');
+      taskText = taskText.replace(/\[START\]/gi, '<span class="badge-start">[START]</span>');
+      taskText = taskText.replace(/\[ACCEPTANCE:MANDATORY\]/gi, '<span class="badge-acc-mandatory">[ACCEPTANCE:MANDATORY]</span>');
+      taskText = taskText.replace(/\[ACCEPTANCE:OPTIONAL\]/gi, '<span class="badge-acc-optional">[ACCEPTANCE:OPTIONAL]</span>');
+      taskText = taskText.replace(/\[ACCEPTANCE\]/gi, '<span class="badge-acc">[ACCEPTANCE]</span>');
+      taskText = taskText.replace(/\[CHOSEN\]/gi, '<span class="badge-chosen">[CHOSEN]</span>');
+      taskText = taskText.replace(/\[lane:([^\]]+)\]/gi, '<span class="badge-lane">[lane:$1]</span>');
+      taskText = taskText.replace(/\[after:([^\]]+)\]/gi, '<span class="badge-after">[after:$1]</span>');
+      taskText = taskText.replace(/\[when:([^\]]+)\]/gi, '<span class="badge-when">[when:$1]</span>');
+      taskText = taskText.replace(/\[parallel\]/gi, '<span class="badge-parallel">[parallel]</span>');
+      taskText = taskText.replace(/\[optional\]/gi, '<span class="badge-optional">[optional]</span>');
       taskText = taskText.replace(/`([^`]+)`/g, '<code>$1</code>');
-      html += `<div class="todo-item indent-${indent} ${isChecked ? 'todo-done' : 'todo-open'}">
-        <span class="todo-check">${isChecked ? '☑' : '☐'}</span>
+      const cls = isChecked ? 'todo-done' : (isSkipped ? 'todo-skipped' : 'todo-open');
+      const checkIcon = isChecked ? '☑' : (isSkipped ? '⊝' : '☐');
+      html += `<div class="todo-item indent-${indent} ${cls}">
+        <span class="todo-check">${checkIcon}</span>
         <span class="todo-text">${taskText}</span>
       </div>`;
       continue;

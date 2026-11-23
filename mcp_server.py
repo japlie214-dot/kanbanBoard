@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "2.0.0"
+SERVER_VERSION = "2.1.0"
+_VIEWER_STARTED = False
 
 TOOLS = [
     {
@@ -46,14 +47,24 @@ TOOLS = [
     },
     {
         "name": "kanban_ticket",
-        "description": "Create or inspect tickets. If 'title' is provided, creates a new ticket in backlog with standard template sections and Todo Tree DAG (auto-assigns next Tnnn ID if ref omitted and project/epic provided). If 'title' is omitted, shows ticket metadata, frontmatter, attachments, and body.",
+        "description": "Create, inspect, or edit tickets. Use action='create' (or provide 'title') to create a backlog ticket; action='show' (default when title/edit fields omitted) to inspect; action='edit' to update Outcome, Scope, Plan (Todo Tree), Prove, or full body without raw file edits.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["show", "create", "edit"],
+                    "description": "Explicit mode (optional; inferred from title/edit fields if omitted)"
+                },
                 "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
                 "project": {"type": "string", "description": "Project slug (when creating without explicit ref)"},
                 "epic": {"type": "string", "description": "Epic slug (when creating without explicit ref)"},
-                "title": {"type": "string", "description": "Optional title. If provided, creates ticket; if omitted, shows ticket details."}
+                "title": {"type": "string", "description": "Ticket title (required for action='create')"},
+                "outcome": {"type": "string", "description": "Updated ## Outcome content (for action='edit')"},
+                "scope": {"type": "string", "description": "Updated ## Scope content (for action='edit')"},
+                "plan": {"type": "string", "description": "Updated ## Plan (Todo Tree) DAG content (for action='edit')"},
+                "prove": {"type": "string", "description": "Updated ## Prove content (for action='edit')"},
+                "body": {"type": "string", "description": "Full replacement markdown body (for action='edit')"}
             }
         }
     },
@@ -81,12 +92,20 @@ TOOLS = [
     },
     {
         "name": "kanban_update",
-        "description": "Update in-flight progress on an active ticket: check off Todo Tree DAG nodes, declare modified files, log progress/handover notes (renews lease), and attach or detach files.",
+        "description": "Update in-flight progress on an active ticket: check off Todo Tree DAG checkpoints with execution proofs (enforces dependency order), skip untaken if/else or optional branches (- [-]), uncheck nodes, declare modified files, log handover notes (renews lease), and attach or detach files. Returns newly unblocked ready_nodes.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "ref": {"type": "string", "description": "Ticket ref (e.g. web/auth/T001)"},
-                "checked_nodes": {"type": "array", "items": {"type": "string"}, "description": "Node labels or text to check off in Todo Tree (- [x])"},
+                "checked_nodes": {"type": "array", "items": {"type": "string"}, "description": "Node IDs to mark executed (- [x]). Prerequisites in [after:...] must already be done."},
+                "node_proofs": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "Execution proof per node ID (e.g. {'A1': 'pytest tests/test_a.py -> 5 passed'}). Recorded in ## Execution Log for kb-qa process audit."
+                },
+                "skip_nodes": {"type": "array", "items": {"type": "string"}, "description": "Node IDs to mark skipped (- [-]) for untaken if/else or optional branches"},
+                "skip_reason": {"type": "string", "description": "Branch decision reason recorded when skipping nodes"},
+                "uncheck_nodes": {"type": "array", "items": {"type": "string"}, "description": "Node IDs to reset back to pending (- [ ])"},
                 "files": {"type": "array", "items": {"type": "string"}, "description": "List of files modified for this ticket"},
                 "notes": {"type": "string", "description": "Progress or handover notes (automatically renews lease)"},
                 "attach_file": {"type": "string", "description": "Workspace-relative path of file to attach"},
@@ -98,17 +117,17 @@ TOOLS = [
     },
     {
         "name": "kanban_doc",
-        "description": "Read or write project/epic architectural documentation and charters (docs: []).",
+        "description": "Read, write, or list project/epic architectural documentation and charters. If 'name' is omitted, automatically defaults to 'epic' (when epic is set) or 'project' (project charter).",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["read", "write"], "description": "Action to perform"},
+                "action": {"type": "string", "enum": ["read", "write", "list"], "description": "Action to perform"},
                 "project": {"type": "string", "description": "Project slug"},
                 "epic": {"type": "string", "description": "Optional epic slug"},
-                "name": {"type": "string", "description": "Document slug/filename (without .md)"},
+                "name": {"type": "string", "description": "Optional document slug/filename without .md (defaults to 'epic' or 'project')"},
                 "content": {"type": "string", "description": "Document content (required for action='write')"}
             },
-            "required": ["action", "project", "name"]
+            "required": ["action", "project"]
         }
     },
     {
@@ -132,15 +151,15 @@ TOOLS = [
     },
     {
         "name": "kanban_qa",
-        "description": "RESTRICTED: Exclusively for kb-qa subagent to execute the 3-tier QA protocol. 'start' initiates the session and returns ticket spec + secret qa_nonce. 'approve' validates substantive evidence (Diff, Positive Tests, Negative Discriminator Tests) and certifies ticket to 'done'.",
+        "description": "RESTRICTED: Exclusively for kb-qa subagent to execute the 4-tier Process + Result QA protocol. 'start' fetches ticket spec + execution log + secret qa_nonce. 'approve' validates process & checkpoint audit + diff + living docs + Horse vs. Zebra evidence and certifies to 'done'. 'reject' burns nonce and returns ticket to 'in-progress' with failure reason.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["start", "approve"], "description": "QA action to perform"},
+                "action": {"type": "string", "enum": ["start", "approve", "reject"], "description": "QA action to perform"},
                 "ref": {"type": "string", "description": "Ticket ref in 'verify' state"},
-                "qa_nonce": {"type": "string", "description": "Ephemeral cryptographic nonce (required for action='approve')"},
-                "evidence_path": {"type": "string", "description": "Path to QA evidence markdown report (required for action='approve')"},
-                "note": {"type": "string", "description": "Acceptance certification summary note (required for action='approve')"}
+                "qa_nonce": {"type": "string", "description": "Ephemeral cryptographic nonce (required for approve/reject)"},
+                "evidence_path": {"type": "string", "description": "Path to QA evidence markdown report (required for approve, optional for reject)"},
+                "note": {"type": "string", "description": "Certification summary (approve) or failure reason (reject)"}
             },
             "required": ["action", "ref"]
         }
@@ -243,26 +262,43 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
 
         # Tool 2: kanban_ticket
         elif name == "kanban_ticket":
+            action = (args.get("action") or "").lower()
             ref = args.get("ref")
             project = args.get("project")
             epic = args.get("epic", "core")
             title = args.get("title")
+            edit_fields = {
+                k: args.get(k) for k in ("outcome", "scope", "plan", "prove", "body")
+                if args.get(k) is not None
+            }
+
+            if not action:
+                if title:
+                    action = "create"
+                elif edit_fields:
+                    action = "edit"
+                else:
+                    action = "show"
 
             if not ref:
-                if project:
+                if project and action == "create":
                     ref = f"{project}/{epic}"
                 else:
                     send_tool_result(req_id, "Error: Either 'ref' (e.g. web/auth/T001) or 'project' must be provided.", is_error=True)
                     return
 
-            if title:
-                # Create ticket
+            if action == "create":
+                if not title:
+                    send_tool_result(req_id, "Error: 'title' is required when creating a ticket.", is_error=True)
+                    return
                 res = kb.api_create(ref, title, board)
                 text = f"Created ticket {res['ref']} in backlog [{res['path']}]\n"
-                text += "Fill in Outcome, Scope, Plan (Todo Tree), and Prove before moving to in-progress."
+                text += "Use kanban_ticket(action='edit', ref=..., outcome=..., scope=..., plan=..., prove=...) before moving to in-progress."
                 send_tool_result(req_id, text)
+            elif action == "edit":
+                res = kb.api_ticket_edit(ref, board=board, **edit_fields)
+                send_tool_result(req_id, f"Updated ticket {res['ref']} (status: {res['status']}).")
             else:
-                # Show ticket
                 ticket = kb.api_show(ref, board)
                 text = f"Ticket: {ticket['ref']}\nStatus: {ticket['status']}\nTitle: {ticket['title']}\n"
                 text += f"Owner: {json.dumps(ticket['metadata'].get('owner'))}\n"
@@ -280,6 +316,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             session_id = args.get("session_id")
             lease_minutes = args.get("lease_minutes", 60)
             force = args.get("force", False)
+            reason = args.get("reason", "")
 
             if status == "done":
                 send_tool_result(
@@ -299,7 +336,8 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 session_id=session_id,
                 lease_minutes=lease_minutes,
                 force=force,
-                caller_is_qa=False
+                caller_is_qa=False,
+                reason=reason,
             )
             text = f"Moved {res['ref']}: {res['from']} -> {res['to']}"
             if res.get("owner"):
@@ -314,6 +352,10 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
         elif name == "kanban_update":
             ref = args["ref"]
             checked_nodes = args.get("checked_nodes")
+            node_proofs = args.get("node_proofs")
+            skip_nodes = args.get("skip_nodes")
+            skip_reason = args.get("skip_reason", "")
+            uncheck_nodes = args.get("uncheck_nodes")
             files = args.get("files")
             notes = args.get("notes")
             attach_file = args.get("attach_file")
@@ -329,11 +371,23 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 det_res = kb.api_detach(ref, detach_file, board)
                 results.append(f"Detached {det_res['detached']}")
 
-            if checked_nodes or files or notes or not (attach_file or detach_file):
-                cp_res = kb.api_checkpoint(ref, checked_nodes, files, notes, board)
+            if checked_nodes or skip_nodes or uncheck_nodes or files or notes or not (attach_file or detach_file):
+                cp_res = kb.api_checkpoint(
+                    ref,
+                    checked_nodes=checked_nodes,
+                    files=files,
+                    notes=notes,
+                    board=board,
+                    node_proofs=node_proofs,
+                    skip_nodes=skip_nodes,
+                    skip_reason=skip_reason,
+                    uncheck_nodes=uncheck_nodes,
+                )
                 results.append(f"Checkpoint saved for {cp_res['ref']}. Lease renewed.")
                 if cp_res.get("files"):
                     results.append(f"Tracked Files: {', '.join(cp_res['files'])}")
+                if cp_res.get("ready_nodes") is not None:
+                    results.append(f"Ready Next Nodes: {', '.join(cp_res['ready_nodes']) or 'none (all done/blocked)'}")
 
             send_tool_result(req_id, "\n".join(results))
 
@@ -342,17 +396,20 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             action = args["action"].lower()
             project = args["project"]
             epic = args.get("epic")
-            doc_name = args["name"]
+            doc_name = args.get("name")
             content = args.get("content", "")
             res = kb.api_doc(action, project, epic, doc_name, content, board)
             if action == "write":
                 text = f"Document written: {res['path']} ({res['size']} bytes)"
+            elif action == "list":
+                text = json.dumps(res, indent=2)
             else:
                 text = f"Document {res['path']}:\n\n{res['content']}"
             send_tool_result(req_id, text)
 
         # Tool 6: kanban_view
         elif name == "kanban_view":
+            global _VIEWER_STARTED
             open_browser = args.get("open_browser", True)
             tickets = kb.api_list(board)
             counts = {}
@@ -362,9 +419,13 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             text = f"Kanban Board Overview ({len(tickets)} tickets):\n" + " | ".join(summary_parts) + "\n\n"
             text += "Interactive view-only UI rendered via resource ui://kanban/board."
             if open_browser:
-                import viewer, threading
-                threading.Thread(target=lambda: viewer.run_server(board, port=7890, open_browser=True), daemon=True).start()
-                text += "\nLaunched local loopback viewer in browser (default port 7890)."
+                if not _VIEWER_STARTED:
+                    import viewer, threading
+                    _VIEWER_STARTED = True
+                    threading.Thread(target=lambda: viewer.run_server(board, port=7890, open_browser=True), daemon=True).start()
+                    text += "\nLaunched local loopback viewer in browser (default port 7890)."
+                else:
+                    text += "\nLocal loopback viewer already running on http://127.0.0.1:7890."
             send_tool_result(req_id, text, extra_result={"_meta": {"ui": {"resourceUri": "ui://kanban/board"}}})
 
         # Tool 7: kanban_qa
@@ -385,8 +446,18 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 res = kb.api_qa_approve(ref, qa_nonce, evidence_path, note, board)
                 text = f"SUCCESS: {res['ref']} verified and transitioned {res['from']} -> {res['to']} [CERTIFIED BY QA]\nEvidence: {res['evidence']}\nAcceptance summary: {res['note']}"
                 send_tool_result(req_id, text)
+            elif action == "reject":
+                qa_nonce = args.get("qa_nonce")
+                note = args.get("note")
+                evidence_path = args.get("evidence_path")
+                if not qa_nonce or not note:
+                    send_tool_result(req_id, "Error: action='reject' requires 'qa_nonce' and 'note'.", is_error=True)
+                    return
+                res = kb.api_qa_reject(ref, qa_nonce, note, board, evidence_path=evidence_path)
+                text = f"REJECTED: {res['ref']} returned {res['from']} -> {res['to']}\nReason: {res['note']}"
+                send_tool_result(req_id, text)
             else:
-                send_tool_result(req_id, f"Unknown kanban_qa action: {action}. Must be 'start' or 'approve'.", is_error=True)
+                send_tool_result(req_id, f"Unknown kanban_qa action: {action}. Must be 'start', 'approve', or 'reject'.", is_error=True)
 
         else:
             send_tool_result(req_id, f"Unknown tool: {name}", is_error=True)

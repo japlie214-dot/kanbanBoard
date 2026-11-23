@@ -1,6 +1,6 @@
 ---
 name: kanban
-description: Unified Kanban board management for Antigravity agents. Unified discovery, atomic move-and-claim, Todo Tree DAG execution, checkpoints, safe attachments, and living architectural documentation.
+description: Universal Kanban board management for AI coding agents (Antigravity, Claude Code, Codex). Unified discovery, atomic move-and-claim, true DAG Todo Tree execution with process proofs, safe attachments, and living architectural documentation.
 ---
 
 # Kanban Board Skill
@@ -12,12 +12,24 @@ This skill guides agents on interacting with the local file-backed Kanban board 
 | Tool | Core Capability | Typical Usage |
 |---|---|---|
 | `kanban_board` | Discover, init, list, or lint | `kanban_board(view="overview")` or `kanban_board(view="init", project="myproj")` |
-| `kanban_ticket` | Create or inspect ticket (auto-assigns ID) | `kanban_ticket(project="web", epic="auth", title="OAuth")` or `kanban_ticket(ref="web/auth/T001")` |
-| `kanban_move` | Move status & claim lease | `kanban_move(ref="web/auth/T001", status="in-progress")` |
-| `kanban_update` | Check nodes, log files/notes, attach | `kanban_update(ref="web/auth/T001", checked_nodes=["..."], files=["..."])` |
-| `kanban_doc` | Read/write charters, epics & custom specs | `kanban_doc(action="write", project="web", name="arch", content="...")` |
+| `kanban_ticket` | Create, inspect, or edit ticket sections | `kanban_ticket(action="create", project="web", epic="auth", title="OAuth")` or `kanban_ticket(action="edit", ref="web/auth/T001", plan="...")` |
+| `kanban_move` | Move status & claim lease (supports `force` + `reason`) | `kanban_move(ref="web/auth/T001", status="in-progress", agent_id="agent-1")` |
+| `kanban_update` | Complete DAG checkpoints with proofs, skip branches, log files/notes, attach | `kanban_update(ref="web/auth/T001", checked_nodes=["A1"], node_proofs={"A1": "pytest -> pass"})` |
+| `kanban_doc` | Read, write, or list charters, epics & custom specs (`name` optional) | `kanban_doc(action="read", project="web", epic="auth")` or `kanban_doc(action="list", project="web")` |
 | `kanban_view` | Open live web dashboard | `kanban_view()` |
-| `kanban_qa` | Independent QA audit (kb-qa only) | `kanban_qa(action="start", ref="...")` & `kanban_qa(action="approve", ...)` |
+| `kanban_qa` | Independent QA audit (kb-qa only: `start`, `approve`, `reject`) | `kanban_qa(action="start", ref="...")` |
+
+---
+
+## Todo Tree DAG Rules (Strict Process & Graph Contract)
+
+Every ticket's `## Plan (Todo Tree)` is a true **Directed Acyclic Graph (DAG)** with explicit checkpoints:
+- **Start & End Invariant**: Must begin at `[START]`; every terminal leaf MUST be `[ACCEPTANCE:MANDATORY]` or `[ACCEPTANCE:OPTIONAL]`.
+- **Parallel Lanes**: Mark independent concurrent branches with `[lane:D] [after:A1] [parallel]`.
+- **Conditional `if/else` Branches**: Use `[when:if(cond):fork1]` and `[when:else(cond):fork1]`. Mark the untaken branch skipped via `skip_nodes` + `skip_reason` (`- [-]`).
+- **Cross-Branch Merges**: Use `[after:A2,B3?]` (optional/conditional merge) or `[after:A4,B5|C5]` (XOR merge) or `[after:A2,B3]` (AND join).
+- **Execution Proof Required**: Check off nodes in dependency order via `kanban_update(..., checked_nodes=[...], node_proofs={...})`. Every completed checkpoint is logged in `## Execution Log` and audited by `kb-qa`.
+- **Mandatory vs. Optional**: ALL active `[ACCEPTANCE:MANDATORY]` paths from `[START]` must be completed and proven before `verify`. `[ACCEPTANCE:OPTIONAL]` branches may be skipped cleanly (`- [-]`).
 
 ---
 
@@ -80,11 +92,12 @@ All custom documents authored via `kanban_doc` are automatically indexed and dis
 Every ticket that alters public contracts, CLI commands, or schemas MUST include a documentation sync step in its `## Plan (Todo Tree)` DAG:
 ```markdown
 ## Plan (Todo Tree)
-- [ ] 1. Core implementation
-  - [ ] 1A. Primary implementation branch [CHOSEN]
-    - [ ] 2A. Core code logic
-    - [ ] 3A. Living documentation & architecture sync (update epic.md/ADR)
-    - [ ] 4A. [ACCEPTANCE] Observable requirement verified
+- [ ] A1 [START] [lane:A] Task definition & pre-flight context verified
+- [ ] A2 [lane:A] [after:A1] Core feature implementation
+- [ ] A3 [lane:A] [after:A2] Living documentation & architecture sync (epic.md/ADR)
+- [ ] A4 [lane:A] [after:A3] [ACCEPTANCE:MANDATORY] Observable requirement verified
+- [ ] B1 [lane:B] [after:A1] [parallel] Automated regression tests & edge-case coverage
+- [ ] B2 [lane:B] [after:B1] [ACCEPTANCE:MANDATORY] Test suite passes cleanly
 ```
 
 ### Pillar 5: QA Documentation Audit Gate
@@ -100,42 +113,65 @@ Discover projects, charters, epics, docs (`docs: []`), and all active tickets:
 kanban_board(view="overview")
 ```
 
-### 2. Pre-Flight Reading & Ticket Creation (`kanban_ticket`)
-Read the governing charter and epic spec, then create the ticket:
+### 2. Pre-Flight Reading, Creation & Section Population (`kanban_ticket`)
+Read the governing charter and epic spec, then create and populate the ticket:
 ```python
 kanban_doc(action="read", project="web", epic="auth")
-kanban_ticket(ref="web/auth/T001", title="Implement JWT refresh token rotation")
+kanban_ticket(action="create", project="web", epic="auth", title="Implement JWT refresh token rotation")
+kanban_ticket(
+    action="edit",
+    ref="web/auth/T001",
+    outcome="Refresh tokens can be rotated securely via POST /auth/refresh with replay detection.",
+    scope="- Allowed: src/auth/tokens.py, tests/test_tokens.py\n- Out of scope: UI login screen",
+    plan="""- [ ] A1 [START] [lane:A] Design token storage and replay detection
+- [ ] A2 [lane:A] [after:A1] Implement rotation handler in tokens.py
+- [ ] A3 [lane:A] [after:A2] Living documentation sync: update epic.md with /auth/refresh spec
+- [ ] A4 [lane:A] [after:A3] [ACCEPTANCE:MANDATORY] Token rotation endpoint functional and replay tested
+- [ ] B1 [lane:B] [after:A1] [parallel] Regression tests for expired and malformed tokens
+- [ ] B2 [lane:B] [after:B1] [ACCEPTANCE:MANDATORY] Test suite passes cleanly""",
+    prove="""```bash
+pytest tests/test_tokens.py -v
+```"""
+)
 ```
-Fill in `## Outcome`, `## Scope`, `## Plan (Todo Tree)` (including living doc step), and `## Prove`.
 
 ### 3. Claiming & Starting Work (`kanban_move`)
 Moving to `in-progress` atomically claims ownership with a 60-minute lease:
 ```python
-kanban_move(ref="web/auth/T001", status="in-progress", agent_id="antigravity", note="Starting work")
+kanban_move(ref="web/auth/T001", status="in-progress", agent_id="agent-1", note="Starting token rotation work")
 ```
 
 ### 4. Logging Progress, Updating Docs & Attachments (`kanban_update`)
 As work progresses:
-1. Check off Todo Tree nodes.
-2. Update `epic.md` or author an ADR via `kanban_doc`.
-3. Declare touched files and log notes:
+1. Complete DAG checkpoints in order with execution proof (`node_proofs`).
+2. Mark untaken conditional or optional branches skipped (`skip_nodes` with `skip_reason`).
+3. Update `epic.md` or author an ADR via `kanban_doc`.
+4. Declare touched files and log notes:
 ```python
 kanban_doc(action="write", project="web", epic="auth", content="... updated auth contracts ...")
 kanban_update(
     ref="web/auth/T001",
-    checked_nodes=["1. Core OAuth flow", "3A. Living documentation & architecture sync"],
-    files=["src/auth.py", "tests/test_auth.py"],
-    notes="Finished refresh handler and updated epic.md with token specs.",
+    checked_nodes=["A1", "A2"],
+    node_proofs={
+        "A1": "Reviewed epic.md and finalized HMAC-SHA256 token rotation schema",
+        "A2": "pytest tests/test_tokens.py::test_rotate -> PASS",
+    },
+    files=["src/auth/tokens.py", "tests/test_tokens.py"],
+    notes="Finished rotation logic and updated epic.md with token specs.",
     attach_file="benchmarks/token_bench.json",
     attach_desc="Token generation latency benchmark"
 )
 ```
 
 ### 5. Submitting for Verification (`kanban_move`)
-When code is written, docs are synced, prove commands pass, and Todo Tree DAG has a complete checked path to `[ACCEPTANCE]`:
+When code is written, docs are synced, prove commands pass, and all active mandatory acceptances are completed and logged:
 ```python
 kanban_move(ref="web/auth/T001", status="verify", note="Implementation and documentation complete, tests passing")
 ```
 
 ### 6. Launching Independent QA (`kb-qa`)
-Invoke the `kb-qa` subagent protocol to audit the diff, verify documentation synchronization, inspect the surrounding ecosystem, and run Horse vs. Zebra tests via `kanban_qa`.
+Invoke the `kb-qa` subagent protocol to audit the DAG execution log, minimal diff, documentation sync, surrounding ecosystem, and Horse vs. Zebra tests via `kanban_qa`.
+
+### 7. Handling QA Rejection or Blocked States
+- If `kb-qa` rejects a ticket back to `in-progress`, inspect `meta.note` and the rejection reason, fix both process gaps and code defects, and re-submit to `verify`.
+- If paused by an external blocker, call `kanban_move(ref=..., status="blocked", note="<blocker reason>")`.
