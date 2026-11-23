@@ -28,32 +28,33 @@ SERVER_VERSION = "2.0.0"
 TOOLS = [
     {
         "name": "kanban_board",
-        "description": "Unified board discovery, ticket listing, and structural health linting in one tool. Use view='overview' (default) for charters, epics, docs, active tickets & owners; view='list' for compact ticket lists; view='lint' for integrity checks.",
+        "description": "Unified board management: discovery, listing, linting, and explicit board initialization. Use view='overview' (default) for charters, epics, docs, active tickets & owners; view='init' to explicitly initialize a board and project charter; view='list' for compact ticket lists; view='lint' for integrity checks.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "view": {
                     "type": "string",
-                    "enum": ["overview", "list", "lint"],
-                    "description": "View mode: 'overview' (default), 'list', or 'lint'",
+                    "enum": ["overview", "init", "list", "lint"],
+                    "description": "Action mode: 'overview' (default), 'init' (initialize board & project/epic), 'list', or 'lint'",
                     "default": "overview"
                 },
-                "project": {"type": "string", "description": "Optional project slug filter"},
-                "epic": {"type": "string", "description": "Optional epic slug filter"},
+                "project": {"type": "string", "description": "Project slug (used for filter or initialization)"},
+                "epic": {"type": "string", "description": "Epic slug (used for filter or initialization)"},
                 "status": {"type": "string", "description": "Optional status filter (backlog, in-progress, verify, done, blocked)"}
             }
         }
     },
     {
         "name": "kanban_ticket",
-        "description": "Create or inspect tickets. If 'title' is provided, creates a new ticket in backlog with standard template sections and Todo Tree DAG. If 'title' is omitted, shows ticket metadata, frontmatter, attachments, and body.",
+        "description": "Create or inspect tickets. If 'title' is provided, creates a new ticket in backlog with standard template sections and Todo Tree DAG (auto-assigns next Tnnn ID if ref omitted and project/epic provided). If 'title' is omitted, shows ticket metadata, frontmatter, attachments, and body.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001)"},
+                "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
+                "project": {"type": "string", "description": "Project slug (when creating without explicit ref)"},
+                "epic": {"type": "string", "description": "Epic slug (when creating without explicit ref)"},
                 "title": {"type": "string", "description": "Optional title. If provided, creates ticket; if omitted, shows ticket details."}
-            },
-            "required": ["ref"]
+            }
         }
     },
     {
@@ -206,7 +207,13 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             epic = args.get("epic")
             status = args.get("status")
 
-            if view == "list":
+            if view == "init":
+                proj = project or "default"
+                ep = epic or "core"
+                kb.api_init(proj, ep, board)
+                text = f"Initialized Kanban board and project '{proj}' with epic '{ep}' at {board / proj}."
+                send_tool_result(req_id, text)
+            elif view == "list":
                 tickets = kb.api_list(board, project, epic, status)
                 text = json.dumps(tickets, indent=2)
                 send_tool_result(req_id, text)
@@ -236,8 +243,18 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
 
         # Tool 2: kanban_ticket
         elif name == "kanban_ticket":
-            ref = args["ref"]
+            ref = args.get("ref")
+            project = args.get("project")
+            epic = args.get("epic", "core")
             title = args.get("title")
+
+            if not ref:
+                if project:
+                    ref = f"{project}/{epic}"
+                else:
+                    send_tool_result(req_id, "Error: Either 'ref' (e.g. web/auth/T001) or 'project' must be provided.", is_error=True)
+                    return
+
             if title:
                 # Create ticket
                 res = kb.api_create(ref, title, board)

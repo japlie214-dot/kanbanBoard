@@ -11,8 +11,8 @@ This skill guides agents on interacting with the local file-backed Kanban board 
 
 | Tool | Core Capability | Typical Usage |
 |---|---|---|
-| `kanban_board` | Discover, list, or lint | `kanban_board(view="overview")` |
-| `kanban_ticket` | Create or inspect ticket | `kanban_ticket(ref="web/auth/T001", title="OAuth")` or `kanban_ticket(ref="web/auth/T001")` |
+| `kanban_board` | Discover, init, list, or lint | `kanban_board(view="overview")` or `kanban_board(view="init", project="myproj")` |
+| `kanban_ticket` | Create or inspect ticket (auto-assigns ID) | `kanban_ticket(project="web", epic="auth", title="OAuth")` or `kanban_ticket(ref="web/auth/T001")` |
 | `kanban_move` | Move status & claim lease | `kanban_move(ref="web/auth/T001", status="in-progress")` |
 | `kanban_update` | Check nodes, log files/notes, attach | `kanban_update(ref="web/auth/T001", checked_nodes=["..."], files=["..."])` |
 | `kanban_doc` | Read/write charters & specs | `kanban_doc(action="write", project="web", name="arch", content="...")` |

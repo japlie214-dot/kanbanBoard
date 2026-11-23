@@ -556,11 +556,30 @@ def full_ref(path: Path, board: Path) -> str:
 # Core Engine Operations
 # ---------------------------------------------------------------------------
 
+def next_ticket_id(project: str, epic: str, board: Path) -> str:
+    """Find highest Tnnn in epic directory and return the next formatted ID."""
+    epic_dir = board / project / epic
+    if not epic_dir.exists():
+        return "T001"
+    highest = 0
+    for f in epic_dir.glob("T*.md"):
+        m = re.match(r"^T(\d{3,})$", f.stem)
+        if m:
+            num = int(m.group(1))
+            if num > highest:
+                highest = num
+    return f"T{highest + 1:03d}"
+
+
 def api_create(ref: str, title: str, board: Path) -> dict:
     parts = ref.strip().split('/')
-    if len(parts) != 3:
-        raise ValueError(f"Ticket ref must be project/epic/Tnnn: '{ref}'")
-    project, epic, tid = parts
+    if len(parts) == 2:
+        project, epic = parts
+        tid = next_ticket_id(project, epic, board)
+    elif len(parts) == 3:
+        project, epic, tid = parts
+    else:
+        raise ValueError(f"Ticket ref must be project/epic or project/epic/Tnnn: '{ref}'")
     if not SLUG_RE.match(project):
         raise ValueError(f"Invalid project slug '{project}'")
     if not SLUG_RE.match(epic):
@@ -1403,6 +1422,10 @@ def main():
 
     sub.add_parser("overview", help="Unified board discovery")
 
+    p_init = sub.add_parser("init", help="Initialize board, project charter, and optional epic")
+    p_init.add_argument("project", nargs="?", default="default", help="Project slug")
+    p_init.add_argument("epic", nargs="?", default=None, help="Optional epic slug")
+
     p_create = sub.add_parser("create", help="Create a ticket in backlog")
     p_create.add_argument("ref", help="project/epic/Tnnn")
     p_create.add_argument("title", help="One-line summary")
@@ -1450,6 +1473,9 @@ def main():
         if args.command == "overview":
             data = api_overview(board)
             print(json.dumps(data, indent=2))
+        elif args.command == "init":
+            api_init(args.project, args.epic, board)
+            print(f"Initialized board and project '{args.project}' at {board / args.project}")
         elif args.command == "create":
             res = api_create(args.ref, args.title, board)
             print(f"Created {res['ref']} in backlog [{res['path']}]")

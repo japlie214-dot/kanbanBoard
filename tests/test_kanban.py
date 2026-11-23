@@ -241,6 +241,15 @@ class TestKanbanCore(unittest.TestCase):
             self.assertFalse(responses[-1]["is_error"])
             self.assertIn("empty", responses[-1]["text"].lower())
 
+            # Test explicit board initialization
+            mcp_server.handle_tool_call(32, "kanban_board", {"view": "init", "project": "newproj", "epic": "core"}, self.board)
+            self.assertIn("Initialized Kanban board", responses[-1]["text"])
+            self.assertTrue((self.board / "newproj" / "project.md").exists())
+
+            # Test create with auto ID
+            mcp_server.handle_tool_call(33, "kanban_ticket", {"project": "newproj", "epic": "core", "title": "Auto ID Ticket"}, self.board)
+            self.assertIn("Created ticket newproj/core/T001", responses[-1]["text"])
+
             # 2. kanban_ticket (create and show)
             mcp_server.handle_tool_call(4, "kanban_ticket", {"ref": "demo/feature/T010", "title": "New Tool Ticket"}, self.board)
             self.assertIn("Created ticket", responses[-1]["text"])

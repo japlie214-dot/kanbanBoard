@@ -42,13 +42,14 @@ The state engine strictly enforces quality standards in code:
 ## The 7 Harmonized MCP Tools
 
 1. **`kanban_board(view, project, epic, status)`**:
-   Unified discovery, listing, and health checks.
+   Unified discovery, board initialization, listing, and health checks.
    - `view="overview"` (default): Projects, charters, epics, docs, active tickets, owners, leases, and Todo Tree completion.
+   - `view="init"`: Explicitly initialize a board, project charter, and initial epic.
    - `view="list"`: Compact ticket list.
    - `view="lint"`: Board structural integrity checks.
-2. **`kanban_ticket(ref, title)`**:
+2. **`kanban_ticket(ref, title, project, epic)`**:
    Create or inspect tickets.
-   - If `title` provided ➔ Creates ticket in `backlog` with Todo Tree DAG template.
+   - If `title` provided ➔ Creates ticket in `backlog` with Todo Tree DAG template (auto-assigns next `Tnnn` ID if `project` and `epic` provided).
    - If `title` omitted ➔ Shows ticket metadata, frontmatter, attachments, and body.
 3. **`kanban_move(ref, status, note, agent_id, force, reason)`**:
    Lifecycle and ownership engine.

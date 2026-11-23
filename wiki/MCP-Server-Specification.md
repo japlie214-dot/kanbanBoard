@@ -38,8 +38,8 @@ The MCP toolset was intentionally consolidated from 14 disparate tools down to *
 
 | Tool Name | Scope & Purpose |
 | :--- | :--- |
-| `kanban_board` | Unified discovery, listing, and health checks (`overview`, `list`, `lint`). |
-| `kanban_ticket` | Dual-mode inspector & creator (create ticket with template or read ticket). |
+| `kanban_board` | Unified discovery, explicit initialization, listing, and health checks (`overview`, `init`, `list`, `lint`). |
+| `kanban_ticket` | Dual-mode inspector & creator (create ticket with auto-ID or read ticket). |
 | `kanban_move` | Lifecycle transitions, atomic claims, 60m leases, and 5 mechanical gates. |
 | `kanban_update` | In-flight progress logging, Todo Tree checkboxes, file declarations, attachments. |
 | `kanban_doc` | Project charter & epic architectural specification management (`docs: []`). |
@@ -61,9 +61,9 @@ Discovers projects, epics, tickets, leases, and architectural documentation.
     "properties": {
       "view": {
         "type": "string",
-        "enum": ["overview", "list", "lint"],
+        "enum": ["overview", "init", "list", "lint"],
         "default": "overview",
-        "description": "'overview': Complete discovery (charters, active leases, completion %); 'list': compact ticket list; 'lint': board structural health."
+        "description": "'overview': Complete discovery; 'init': explicitly initialize board and project charter; 'list': compact ticket list; 'lint': board structural health."
       },
       "project": { "type": "string", "description": "Filter by project name." },
       "epic": { "type": "string", "description": "Filter by epic name." },

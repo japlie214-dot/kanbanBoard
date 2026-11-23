@@ -24,6 +24,7 @@ CORE_FILES = [
     "skills/kanban/SKILL.md",
     "skills/kanban-qa/SKILL.md",
     ".claude-plugin/plugin.json",
+    "commands/kanban-init.md",
     "commands/kanban-move.md",
     "commands/kanban-new.md",
     "commands/kanban-qa.md",
