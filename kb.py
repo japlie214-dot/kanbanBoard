@@ -309,7 +309,8 @@ def render_frontmatter(meta: dict, body: str) -> str:
         else:
             lines.append(f"{k}: {v}")
     lines.append("---")
-    return "\n".join(lines) + "\n" + body
+    body_clean = body.lstrip("\r\n")
+    return "\n".join(lines) + "\n\n" + body_clean
 
 
 # ---------------------------------------------------------------------------

@@ -24,7 +24,38 @@ details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-
 .docs{margin:4px 8px}.docs-toggle{color:var(--accent);font-size:11px}.doc{border-left:2px solid var(--line);margin:4px 0;padding:2px 8px}.doc-name{font-size:10px;color:var(--muted);font-weight:700}.doc-body{white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;margin:2px 0;max-height:360px;overflow:auto}
 .more{font:inherit;font-size:11px;color:var(--accent);background:none;border:1px dashed var(--line);border-radius:4px;padding:3px;cursor:pointer;width:100%}.more:hover{border-color:var(--accent)}
 button{font:inherit;cursor:pointer}button:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#error{margin:8px 0 0;color:var(--bad)}#error:empty{display:none}.detail{position:fixed;inset:0 0 0 auto;width:min(580px,100%);z-index:5;padding:16px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-4px 0 20px #0004;overflow:auto}.detail[hidden]{display:none}.detail h2{overflow-wrap:anywhere;margin-top:4px}.detail pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);font:12px/1.45 ui-monospace,Consolas,monospace}.detail .dep{margin:3px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px;cursor:pointer}.empty-state{padding:24px;border:1px solid var(--line);border-radius:7px;background:var(--panel);text-align:center}
+#error{margin:8px 0 0;color:var(--bad)}#error:empty{display:none}
+body.has-detail main{padding-bottom:min(52vh, 520px)}
+.detail{position:fixed;inset:auto 0 0 0;width:100%;height:min(50vh, 500px);min-height:220px;max-height:85vh;z-index:100;display:flex;flex-direction:column;background:var(--panel);border-top:2px solid var(--line);box-shadow:0 -6px 24px #0007;resize:vertical}
+.detail[hidden]{display:none!important}
+.detail-bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;background:color-mix(in srgb,var(--panel) 95%,var(--bg));border-bottom:1px solid var(--line);padding:8px 18px;flex-shrink:0}
+.detail-title-group{display:flex;align-items:center;gap:12px;min-width:0}
+.detail-ref{font:11px/1 ui-monospace,Consolas,monospace;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);padding:3px 7px;border-radius:4px;white-space:nowrap}
+.detail-title{font-size:15px;font-weight:750;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.detail-close{font:inherit;font-size:12px;font-weight:700;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:all .15s}
+.detail-close:hover{background:var(--bad);color:#fff;border-color:var(--bad)}
+.detail-content{flex:1;overflow-y:auto;padding:14px 18px 24px;display:grid;grid-template-columns:minmax(280px, 340px) 1fr;gap:18px}
+@media (max-width:850px){.detail-content{grid-template-columns:1fr}}
+.detail-sidebar{display:flex;flex-direction:column;gap:12px}
+.detail-section{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:8px 12px}
+.detail-label{font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+.detail-val{font-size:12px}
+.status-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:750;color:#fff;background:var(--status-color);text-transform:uppercase}
+.lease-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-top:3px}
+.lease-active{background:color-mix(in srgb,var(--s-done) 20%,transparent);color:var(--s-done);border:1px solid var(--s-done)}
+.lease-expired{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad);border:1px solid var(--bad)}
+.lease-unclaimed{background:color-mix(in srgb,var(--muted) 20%,transparent);color:var(--muted);border:1px solid var(--line)}
+.detail-sub{color:var(--muted);font-size:10px;margin-top:2px}
+.files-list,.attachments-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.file-item{font:11px/1.35 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:2px 6px;overflow-wrap:anywhere}
+.attachment-item{font-size:11px;padding:2px 0}
+.att-name{font-weight:600;color:var(--accent)}
+.att-desc{color:var(--muted)}
+.detail-main{display:flex;flex-direction:column;min-width:0}
+.detail-body-box{display:flex;flex-direction:column;flex:1}
+.ticket-body-pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:10px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font:12px/1.45 ui-monospace,Consolas,monospace;margin:0;flex:1;overflow:auto}
+.detail .dep{margin:3px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px;cursor:pointer}
+.empty-state{padding:24px;border:1px solid var(--line);border-radius:7px;background:var(--panel);text-align:center}
 </style>
 </head>
 <body>
@@ -129,49 +160,111 @@ function openDetail(reference, focus = false) {
   detailRef = reference;
   panel.replaceChildren();
   panel.hidden = false;
-  const close = add(panel, "button", "filter", "Close");
+  document.body.classList.add("has-detail");
+
+  // Sticky top bar: Title, Ref, and Close button ALWAYS in view at top right
+  const bar = add(panel, "div", "detail-bar");
+  const titleGroup = add(bar, "div", "detail-title-group");
+  add(titleGroup, "span", "detail-ref", reference);
+  add(titleGroup, "h2", "detail-title", ticket.title || "Ticket");
+
+  const close = add(bar, "button", "detail-close", "✕ Close");
   close.type = "button";
+  close.title = "Close (Esc)";
   close.onclick = closeDetail;
-  add(panel, "h2", "", ticket.title || "Ticket");
-  add(panel, "div", "meta", reference);
-  const field = (label, value) => {
-    add(panel, "h3", "", label);
-    add(panel, "pre", "", value || "(empty)");
-  };
-  field("Status", ticket.status + (ticket.since ? " since " + ticket.since : ""));
+
+  // Split content grid
+  const content = add(panel, "div", "detail-content");
+  const sidebar = add(content, "div", "detail-sidebar");
+  const mainArea = add(content, "div", "detail-main");
+
+  // 1. Status Section
+  const sBox = add(sidebar, "div", "detail-section");
+  add(sBox, "div", "detail-label", "Status");
+  const sVal = add(sBox, "div", "detail-val");
+  const sBadge = add(sVal, "span", "status-badge", ticket.status);
+  sBadge.dataset.status = ticket.status;
+  if (ticket.since) add(sVal, "span", "detail-sub", " (since " + ticket.since + ")");
+
+  // 2. Ownership & Lease Section
   if (ticket.owner && ticket.owner.agent) {
-    field("Owner", ticket.owner.agent + (ticket.lease_status ? " (" + ticket.lease_status + ")" : ""));
+    const oBox = add(sidebar, "div", "detail-section");
+    add(oBox, "div", "detail-label", "Ownership & Lease");
+    const oVal = add(oBox, "div", "detail-val");
+    add(oVal, "div", "owner-name", "👤 " + ticket.owner.agent);
+
+    if (ticket.lease_status) {
+      const isExpired = ticket.lease_status.includes("expired");
+      const isUnclaimed = ticket.lease_status.includes("unclaimed");
+      const badgeCls = isExpired ? "lease-expired" : (isUnclaimed ? "lease-unclaimed" : "lease-active");
+      add(oVal, "span", "lease-badge " + badgeCls, ticket.lease_status);
+    }
+    if (ticket.owner.claimed_at) {
+      add(oVal, "div", "detail-sub", "Claimed: " + ticket.owner.claimed_at);
+    }
+    if (ticket.owner.lease_expires) {
+      add(oVal, "div", "detail-sub", "Expires: " + ticket.owner.lease_expires);
+    }
+    if (ticket.owner.session_id) {
+      add(oVal, "div", "detail-sub", "Session: " + ticket.owner.session_id);
+    }
   }
+
+  // 3. Tracked Files
   if (ticket.files && ticket.files.length) {
-    field("Tracked Files", ticket.files.join("\n"));
+    const fBox = add(sidebar, "div", "detail-section");
+    add(fBox, "div", "detail-label", "Tracked Files (" + ticket.files.length + ")");
+    const fList = add(fBox, "div", "files-list");
+    for (const f of ticket.files) {
+      add(fList, "div", "file-item", f);
+    }
   }
+
+  // 4. Attachments
   if (ticket.attachments && ticket.attachments.length) {
-    add(panel, "h3", "", "Attachments (" + ticket.attachments.length + ")");
-    const attBox = add(panel, "div", "attachments-list");
+    const aBox = add(sidebar, "div", "detail-section");
+    add(aBox, "div", "detail-label", "Attachments (" + ticket.attachments.length + ")");
+    const aList = add(aBox, "div", "attachments-list");
     for (const a of ticket.attachments) {
-      const aItem = add(attBox, "div", "attachment-item");
+      const aItem = add(aList, "div", "attachment-item");
       add(aItem, "span", "att-name", "📎 " + (a.name || a.path));
       if (a.desc) add(aItem, "span", "att-desc", " — " + a.desc);
     }
   }
-  if (ticket.note) field("Note", ticket.note);
+
+  // 5. Note
+  if (ticket.note) {
+    const nBox = add(sidebar, "div", "detail-section");
+    add(nBox, "div", "detail-label", "Note");
+    add(nBox, "div", "detail-val", ticket.note);
+  }
+
+  // 6. Dependencies
   if (ticket.depends && ticket.depends.length) {
-    add(panel, "h3", "", "Depends on");
+    const dBox = add(sidebar, "div", "detail-section");
+    add(dBox, "div", "detail-label", "Depends on");
     for (const ref of ticket.depends) {
       const target = ticketIndex.get(ref);
-      const button = add(panel, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
+      const button = add(dBox, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
       button.type = "button";
       button.disabled = !target;
       button.onclick = () => openDetail(ref, true);
     }
   }
-  field("Ticket body", ticket.body);
+
+  // Main Area: Ticket Body (Leading empty space stripped cleanly!)
+  const bBox = add(mainArea, "div", "detail-body-box");
+  add(bBox, "div", "detail-label", "Ticket Body");
+  const cleanBody = ticket.body ? ticket.body.trim() : "(empty)";
+  add(bBox, "pre", "ticket-body-pre", cleanBody);
+
   if (focus) close.focus();
 }
 
 function closeDetail() {
   detailRef = null;
   $("detail").hidden = true;
+  document.body.classList.remove("has-detail");
   if (detailReturn && detailReturn.isConnected) detailReturn.focus();
 }
 
