@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanban Board</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f8;--panel:#fff;--text:#18212b;--muted:#657386;--line:#d8dee7;--accent:#3567a8;--bad:#c83232;--warn:#a66a00;--shadow:0 1px 3px #15202b16;--proj:#0b7285;--epic:#9c36b5;--s-backlog:#656d76;--s-in-progress:#7e4ade;--s-verify:#8f6500;--s-done:#197b35;--s-blocked:#cf222e}
+@media(prefers-color-scheme:dark){:root{--bg:#11171d;--panel:#1a232c;--text:#e5edf5;--muted:#a0afbd;--line:#33414e;--accent:#87b9ff;--bad:#ff7272;--warn:#f4bf53;--shadow:0 1px 3px #0006;--proj:#3bc9db;--epic:#da77f2;--s-backlog:#8b949e;--s-in-progress:#bc8cff;--s-verify:#e3b341;--s-done:#3fb950;--s-blocked:#ff7b72}}
+:root[data-theme=light]{color-scheme:light;--bg:#f4f6f8;--panel:#fff;--text:#18212b;--muted:#657386;--line:#d8dee7;--accent:#3567a8;--bad:#c83232;--warn:#a66a00;--shadow:0 1px 3px #15202b16;--proj:#0b7285;--epic:#9c36b5;--s-backlog:#656d76;--s-in-progress:#7e4ade;--s-verify:#8f6500;--s-done:#197b35;--s-blocked:#cf222e}
+:root[data-theme=dark]{color-scheme:dark;--bg:#11171d;--panel:#1a232c;--text:#e5edf5;--muted:#a0afbd;--line:#33414e;--accent:#87b9ff;--bad:#ff7272;--warn:#f4bf53;--shadow:0 1px 3px #0006;--proj:#3bc9db;--epic:#da77f2;--s-backlog:#8b949e;--s-in-progress:#bc8cff;--s-verify:#e3b341;--s-done:#3fb950;--s-blocked:#ff7b72}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;box-shadow:var(--shadow)}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.brand{font-size:17px;font-weight:750;margin-right:auto;letter-spacing:-.01em}.totals{display:flex;gap:6px;flex-wrap:wrap}.total{border:1px solid var(--line);border-radius:5px;padding:3px 7px;color:var(--muted);font-size:11px;display:inline-flex;align-items:center}.total b{color:var(--text);margin-left:3px}.meta{color:var(--muted);font-size:11px}.connection{display:inline-flex;align-items:center;gap:5px}.dot{width:8px;height:8px;border-radius:50%;background:#b23a3a}.live .dot{background:#2eaa68;box-shadow:0 0 0 2px #2eaa6833}
+main{padding:10px 14px 24px}.lane{background:var(--panel);border:1px solid var(--line);border-radius:7px;margin:0 0 10px;overflow:hidden;box-shadow:var(--shadow);border-left:4px solid var(--proj)}.lane>.lane-head{display:flex;align-items:baseline;gap:9px;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;background:color-mix(in srgb,var(--proj) 10%,var(--panel))}.lane-name{font-size:14px;font-weight:700;color:var(--proj)}.lane-summary{color:var(--muted);overflow:hidden;text-overflow:ellipsis}.lane-meta{margin-left:auto;color:var(--muted);font-size:11px}.columns{display:flex;gap:6px;padding:7px;overflow-x:auto;align-items:stretch}.column{flex:1 1 0;min-width:140px;border-radius:5px;background:color-mix(in srgb,var(--bg) 75%,var(--panel));padding:5px}.column.empty{flex:0 0 90px;min-width:90px}.column-title{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.045em;padding:1px 2px 5px}.column-title b{font-weight:600}.cards{display:grid;gap:5px;align-content:start;max-height:70vh;overflow-y:auto}.card{border:1px solid var(--line);border-radius:5px;padding:6px 7px;background:var(--panel);min-width:0;cursor:pointer}.card.error{border:1px solid var(--bad);box-shadow:inset 3px 0 var(--bad)}.card.warning{border-color:var(--warn)}.card-top{display:flex;align-items:flex-start;gap:5px}.id{font-size:10px;color:var(--muted);font-weight:700;white-space:nowrap}.title{font-weight:650;overflow-wrap:anywhere}.priority{margin-left:auto;border-radius:3px;padding:0 4px;background:var(--bg);color:var(--muted);font-size:9px;white-space:nowrap}.p0,.p1{color:var(--bad);font-weight:800}.details{display:flex;flex-wrap:wrap;gap:2px 8px;color:var(--muted);font-size:10px;margin-top:3px}.reason{color:var(--bad);margin-top:3px;overflow-wrap:anywhere}.ticket-note{color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.deps{overflow-wrap:anywhere;color:var(--accent)}.issue-list{margin:4px 0 0;padding-left:14px;color:var(--bad);font-size:10px}.empty-note{color:var(--muted);font-size:10px;padding:3px 2px}
+[data-status="backlog"]{--status-color:var(--s-backlog)}[data-status="in-progress"]{--status-color:var(--s-in-progress)}[data-status="verify"]{--status-color:var(--s-verify)}[data-status="done"]{--status-color:var(--s-done)}[data-status="blocked"]{--status-color:var(--s-blocked)}
+.column[data-status]{border-top:3px solid var(--status-color);background:color-mix(in srgb,var(--status-color) 6%,color-mix(in srgb,var(--bg) 75%,var(--panel)))}.column[data-status]>.column-title{color:var(--status-color)}.card[data-status]{box-shadow:inset 3px 0 var(--status-color)}.card[data-status="done"]{opacity:.75}.card[data-status="done"]:hover{opacity:1}
+.total[data-status]::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--status-color);margin-right:5px}
+.age.stale{color:var(--warn)}.age.stale-critical{color:var(--bad);font-weight:700}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px}.filter{font:inherit;font-size:11px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text)}
+details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}.lane>summary::before,.epic>summary::before{content:"▸";color:var(--muted);margin-right:4px}.lane[open]>summary::before,.epic[open]>summary::before{content:"▾"}
+.epic{margin:6px 7px;border:1px solid var(--line);border-radius:6px;background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-left:4px solid var(--epic)}.epic>.epic-head{display:flex;align-items:baseline;gap:9px;padding:5px 8px;white-space:nowrap;overflow:hidden;background:color-mix(in srgb,var(--epic) 9%,transparent)}.epic-name{font-weight:700;color:var(--epic)}
+.counts{display:inline-flex;gap:3px}.count{font-size:10px;font-weight:700;padding:0 5px;border-radius:8px;color:#fff;background:var(--status-color)}
+.docs{margin:4px 8px}.docs-toggle{color:var(--accent);font-size:11px}.doc{border-left:2px solid var(--line);margin:4px 0;padding:2px 8px}.doc-name{font-size:10px;color:var(--muted);font-weight:700}.doc-body{white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;margin:2px 0;max-height:360px;overflow:auto}
+.more{font:inherit;font-size:11px;color:var(--accent);background:none;border:1px dashed var(--line);border-radius:4px;padding:3px;cursor:pointer;width:100%}.more:hover{border-color:var(--accent)}
+button{font:inherit;cursor:pointer}button:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#error{margin:8px 0 0;color:var(--bad)}#error:empty{display:none}.detail{position:fixed;inset:0 0 0 auto;width:min(580px,100%);z-index:5;padding:16px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-4px 0 20px #0004;overflow:auto}.detail[hidden]{display:none}.detail h2{overflow-wrap:anywhere;margin-top:4px}.detail pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);font:12px/1.45 ui-monospace,Consolas,monospace}.detail .dep{margin:3px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px;cursor:pointer}.empty-state{padding:24px;border:1px solid var(--line);border-radius:7px;background:var(--panel);text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">Kanban Board</div>
+    <div class="totals" id="totals"></div>
+    <div class="meta" id="refreshed">Refreshed: —</div>
+    <div class="meta connection" id="connection"><span class="dot"></span><span>offline</span></div>
+  </div>
+  <div class="filters" id="filters"></div>
+</header>
+<div id="error" role="alert"></div>
+<main id="board" aria-live="polite"></main>
+<aside id="detail" class="detail" role="dialog" aria-label="Ticket detail" hidden></aside>
+
+<script>
+const statuses = ["backlog", "in-progress", "verify", "done", "blocked"];
+let detailRef = null, detailReturn = null;
+const ticketIndex = new Map();
+const $ = id => document.getElementById(id);
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function add(parent, tag, cls, text) {
+  const node = el(tag, cls, text);
+  parent.append(node);
+  return node;
+}
+function store(key, value) {
+  try {
+    if (value === undefined) return localStorage.getItem(key);
+    localStorage.setItem(key, value);
+  } catch(e) { return null; }
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(value.length === 10 ? value + "T00:00:00" : value.replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function age(value) {
+  const date = parseDate(value);
+  if (!date) return value ? "since " + value : "since ?";
+  const hours = Math.max(0, Math.floor((Date.now() - date.getTime()) / 3600000));
+  return hours < 1 ? "<1h" : hours < 24 ? hours + "h" : Math.floor(hours / 24) + "d";
+}
+
+function ticketLabel(ticket) {
+  return [ticket.id, ticket.title || "Ticket", "Status: " + (ticket.status || "unknown"), ticket.note ? "Note: " + ticket.note : ""].filter(Boolean).join(" · ");
+}
+
+function ticketCard(ticket, issues) {
+  const card = el("article", "card");
+  card.dataset.status = ticket.status;
+  const top = add(card, "div", "card-top");
+  if (ticket.id) add(top, "span", "id", ticket.id);
+  add(top, "span", "title", ticket.title || "Untitled ticket");
+  if (ticket.priority) add(top, "span", "priority " + ticket.priority, ticket.priority);
+  const details = add(card, "div", "details");
+  if (ticket.assignee) add(details, "span", "", ticket.assignee);
+  if (ticket.owner && ticket.owner.agent) {
+    const ownerSpan = add(details, "span", "owner-badge", "👤 " + ticket.owner.agent);
+    ownerSpan.title = "Claimed by " + ticket.owner.agent + (ticket.lease_status ? " (" + ticket.lease_status + ")" : "");
+  }
+  const ageLabel = add(details, "span", "age", age(ticket.since));
+  const since = parseDate(ticket.since);
+  const ageHours = since ? (Date.now() - since.getTime()) / 3600000 : 0;
+  if (["in-progress", "verify", "blocked"].includes(ticket.status) && ageHours > 24) {
+    ageLabel.classList.add("stale");
+    ageLabel.title = "stale";
+    if (ageHours > 72) ageLabel.classList.add("stale-critical");
+  }
+  card.title = ticket.reference + (ticket.since ? " · " + ticket.status + " since " + ticket.since : "");
+  if (ticket.depends && ticket.depends.length) add(details, "span", "deps", "→ " + ticket.depends.join(", "));
+  if (ticket.note) {
+    const text = add(card, "div", ticket.status === "blocked" ? "reason" : "ticket-note", ticket.note);
+    text.title = ticket.note;
+  }
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.dataset.ref = ticket.reference;
+  card.setAttribute("aria-label", ticketLabel(ticket));
+  card.onclick = () => { detailReturn = card; openDetail(ticket.reference, true); };
+  card.onkeydown = event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      detailReturn = card;
+      openDetail(ticket.reference, true);
+    }
+  };
+  return card;
+}
+
+function openDetail(reference, focus = false) {
+  const ticket = ticketIndex.get(reference), panel = $("detail");
+  if (!ticket) { closeDetail(); return; }
+  detailRef = reference;
+  panel.replaceChildren();
+  panel.hidden = false;
+  const close = add(panel, "button", "filter", "Close");
+  close.type = "button";
+  close.onclick = closeDetail;
+  add(panel, "h2", "", ticket.title || "Ticket");
+  add(panel, "div", "meta", reference);
+  const field = (label, value) => {
+    add(panel, "h3", "", label);
+    add(panel, "pre", "", value || "(empty)");
+  };
+  field("Status", ticket.status + (ticket.since ? " since " + ticket.since : ""));
+  if (ticket.owner && ticket.owner.agent) {
+    field("Owner", ticket.owner.agent + (ticket.lease_status ? " (" + ticket.lease_status + ")" : ""));
+  }
+  if (ticket.files && ticket.files.length) {
+    field("Tracked Files", ticket.files.join("\n"));
+  }
+  if (ticket.attachments && ticket.attachments.length) {
+    add(panel, "h3", "", "Attachments (" + ticket.attachments.length + ")");
+    const attBox = add(panel, "div", "attachments-list");
+    for (const a of ticket.attachments) {
+      const aItem = add(attBox, "div", "attachment-item");
+      add(aItem, "span", "att-name", "📎 " + (a.name || a.path));
+      if (a.desc) add(aItem, "span", "att-desc", " — " + a.desc);
+    }
+  }
+  if (ticket.note) field("Note", ticket.note);
+  if (ticket.depends && ticket.depends.length) {
+    add(panel, "h3", "", "Depends on");
+    for (const ref of ticket.depends) {
+      const target = ticketIndex.get(ref);
+      const button = add(panel, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
+      button.type = "button";
+      button.disabled = !target;
+      button.onclick = () => openDetail(ref, true);
+    }
+  }
+  field("Ticket body", ticket.body);
+  if (focus) close.focus();
+}
+
+function closeDetail() {
+  detailRef = null;
+  $("detail").hidden = true;
+  if (detailReturn && detailReturn.isConnected) detailReturn.focus();
+}
+
+document.addEventListener("keydown", event => { if (event.key === "Escape") closeDetail(); });
+
+function fold(parent, key, cls, defaultOpen) {
+  const node = add(parent, "details", cls);
+  const saved = store("kb.open." + key);
+  node.open = saved === null ? defaultOpen : saved === "1";
+  node.addEventListener("toggle", () => store("kb.open." + key, node.open ? "1" : "0"));
+  return node;
+}
+
+function docs(parent, key, list) {
+  if (!list || !list.length) return;
+  const box = fold(parent, key + ".docs", "docs", false);
+  add(box, "summary", "docs-toggle", "docs: " + list.map(d => d.name).join(", "));
+  for (const doc of list) {
+    const section = add(box, "section", "doc");
+    add(section, "div", "doc-name", doc.name);
+    add(section, "pre", "doc-body", doc.markdown ? doc.markdown.replace(/^---[\s\S]*?\n---\r?\n/, "") : "");
+  }
+}
+
+function counts(parent, tickets) {
+  const box = add(parent, "span", "counts");
+  for (const status of statuses) {
+    const n = tickets.filter(t => t.status === status).length;
+    if (!n) continue;
+    const chip = add(box, "span", "count", n);
+    chip.dataset.status = status;
+    chip.title = status;
+  }
+}
+
+const filterKeys = ["q", "status", "project", "epic", "hidedone"];
+function readFilters() {
+  const params = new URLSearchParams(location.search);
+  return Object.fromEntries(filterKeys.map(k => [k, params.get(k) || ""]));
+}
+function writeFilters(f) {
+  const params = new URLSearchParams();
+  for (const k of filterKeys) if (f[k]) params.set(k, f[k]);
+  history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
+}
+function matches(t, p, f) {
+  const text = (t.reference + " " + (t.title || "") + " " + (t.note || "") + " " + (t.status || "")).toLowerCase();
+  return (!f.q || text.includes(f.q.toLowerCase())) &&
+         (!f.status || t.status === f.status) &&
+         (!f.project || p.slug === f.project) &&
+         (!f.epic || (p.slug + "/" + t.epic) === f.epic) &&
+         !(f.hidedone && t.status === "done");
+}
+
+let lastData = null;
+function buildFilterBar(board) {
+  const bar = $("filters");
+  const f = readFilters();
+  const all = board.projects.flatMap(p => p.tickets);
+  const options = {
+    status: statuses,
+    project: board.projects.map(p => p.slug),
+    epic: [...new Set(board.projects.flatMap(p => p.epics.map(e => p.slug + "/" + e.slug)))].sort()
+  };
+  if (!bar.dataset.built) {
+    bar.dataset.built = "1";
+    const q = add(bar, "input", "filter");
+    q.id = "f-q";
+    q.placeholder = "filter ref / title / note";
+    q.oninput = () => { const n = readFilters(); n.q = q.value; writeFilters(n); render(lastData); };
+    for (const key of Object.keys(options)) {
+      const s = add(bar, "select", "filter");
+      s.id = "f-" + key;
+      s.onchange = () => { const n = readFilters(); n[key] = s.value; writeFilters(n); render(lastData); };
+    }
+    const label = add(bar, "label", "filter");
+    const cb = add(label, "input");
+    cb.type = "checkbox";
+    cb.id = "f-hidedone";
+    cb.onchange = () => { const n = readFilters(); n.hidedone = cb.checked ? "1" : ""; writeFilters(n); render(lastData); };
+    label.append(" hide done");
+    add(bar, "span", "meta").id = "f-count";
+  }
+  $("f-q").value = f.q;
+  $("f-hidedone").checked = !!f.hidedone;
+  for (const [key, values] of Object.entries(options)) {
+    const s = $("f-" + key);
+    s.replaceChildren();
+    add(s, "option", "", key + ": all").value = "";
+    for (const v of values) {
+      const o = add(s, "option", "", v);
+      o.value = v;
+    }
+    s.value = f[key];
+  }
+}
+
+function render(data) {
+  if (!data) return;
+  lastData = data;
+  const board = data.board || data;
+  const tickets = (board.projects || []).flatMap(p => p.tickets || []);
+  ticketIndex.clear();
+  for (const ticket of tickets) ticketIndex.set(ticket.reference, ticket);
+  buildFilterBar(board);
+  const f = readFilters();
+  const totals = $("totals");
+  totals.replaceChildren();
+  for (const status of statuses) {
+    const count = tickets.filter(t => t.status === status).length;
+    const item = add(totals, "span", "total", status);
+    item.dataset.status = status;
+    add(item, "b", "", count);
+  }
+  $("refreshed").textContent = "Refreshed: " + new Date().toLocaleTimeString();
+  const root = $("board");
+  root.replaceChildren();
+
+  if (!board.projects || !board.projects.length) {
+    const empty = add(root, "section", "empty-state");
+    add(empty, "h2", "", "No Kanban projects yet");
+    add(empty, "p", "", "Create your first project ticket using kanban_create(ref='project/epic/T001', title='...')");
+    return;
+  }
+
+  let visible = 0;
+  for (const project of board.projects) {
+    const lane = fold(root, "p." + project.slug, "lane", true);
+    const head = add(lane, "summary", "lane-head");
+    add(head, "span", "lane-name", project.name || project.slug);
+    add(head, "span", "lane-meta", project.state || "active");
+    if (project.summary) add(head, "span", "lane-summary", project.summary);
+    counts(head, project.tickets || []);
+    docs(lane, "p." + project.slug, [{ name: "project.md", markdown: project.body }, ...(project.docs || [])]);
+
+    for (const epic of project.epics || []) {
+      const epicTickets = (project.tickets || []).filter(t => t.epic === epic.slug);
+      const shownTickets = epicTickets.filter(t => matches(t, project, f));
+      visible += shownTickets.length;
+      const box = fold(lane, "e." + project.slug + "." + epic.slug, "epic", true);
+      const eh = add(box, "summary", "epic-head");
+      add(eh, "span", "epic-name", epic.name || epic.slug);
+      add(eh, "span", "lane-meta", epic.state || "active");
+      if (epic.summary) add(eh, "span", "lane-summary", epic.summary);
+      counts(eh, epicTickets);
+      docs(box, "e." + project.slug + "." + epic.slug, [{ name: "epic.md", markdown: epic.body }, ...(epic.docs || [])]);
+
+      const columns = add(box, "div", "columns");
+      for (const status of statuses) {
+        let items = shownTickets.filter(t => t.status === status);
+        if (status === "done") items = items.slice().sort((a,b) => (b.since || "").localeCompare(a.since || ""));
+        const column = add(columns, "section", "column" + (items.length ? "" : " empty"));
+        column.dataset.status = status;
+        const title = add(column, "div", "column-title", status);
+        add(title, "b", "", items.length);
+        const cards = add(column, "div", "cards");
+        if (!items.length) add(cards, "div", "empty-note", "—");
+        for (const t of items) cards.append(ticketCard(t, []));
+      }
+    }
+  }
+  $("f-count").textContent = visible + " / " + tickets.length + " tickets";
+  if (detailRef && ticketIndex.has(detailRef)) openDetail(detailRef);
+}
+
+let refreshSequence = 0, source = null;
+async function refresh() {
+  if (window.__INITIAL_DATA__) {
+    render(window.__INITIAL_DATA__);
+    $("connection").classList.add("live");
+    $("connection").lastElementChild.textContent = "embedded";
+  }
+  const sequence = ++refreshSequence;
+  try {
+    const response = await fetch("/api/board", { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (sequence !== refreshSequence) return;
+    render(data);
+    $("connection").classList.add("live");
+    $("connection").lastElementChild.textContent = "live";
+    $("error").textContent = "";
+  } catch (error) {
+    if (window.__INITIAL_DATA__) return;
+    if (sequence !== refreshSequence) return;
+    $("connection").classList.remove("live");
+    $("connection").lastElementChild.textContent = "offline";
+    $("error").textContent = "Could not load board: " + error.message;
+  }
+}
+
+function setLive(enabled) {
+  if (source) { source.close(); source = null; }
+  $("connection").classList.remove("live");
+  $("connection").lastElementChild.textContent = enabled ? "connecting" : "paused";
+  if (!enabled) return;
+  try {
+    source = new EventSource("/events");
+    source.onopen = () => { $("connection").classList.add("live"); $("connection").lastElementChild.textContent = "live"; };
+    source.onerror = () => { $("connection").classList.remove("live"); $("connection").lastElementChild.textContent = "stale"; };
+    source.onmessage = refresh;
+  } catch(e) {}
+}
+
+// Support MCP App postMessage updates
+window.addEventListener("message", event => {
+  if (event.data && (event.data.type === "kanban_update" || event.data.board)) {
+    render(event.data.board ? event.data : { board: event.data });
+  }
+});
+
+const toolbar = document.querySelector(".top");
+const refreshButton = add(toolbar, "button", "filter", "Refresh");
+refreshButton.type = "button";
+refreshButton.onclick = refresh;
+
+const themeButton = add(toolbar, "button", "filter", "Theme");
+themeButton.type = "button";
+themeButton.onclick = () => {
+  const current = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  store("kanban-theme", next);
+};
+const savedTheme = store("kanban-theme");
+if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+
+refresh();
+setLive(true);
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "kanban-board",
+  "version": "2.0.0",
+  "description": "Kanban task tracking with native MCP tools and independent QA gating for agents.",
+  "author": {
+    "name": "kanbanBoard",
+    "url": "https://github.com/kanbanBoard"
+  },
+  "mcpServers": {
+    "kanban": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"]
+    }
+  }
+}
