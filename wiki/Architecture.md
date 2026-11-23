@@ -85,6 +85,22 @@ $$\text{ref} = \langle\text{project}\rangle / \langle\text{epic}\rangle / \langl
 
 Ticket IDs are zero-padded alphanumeric strings prefixed with `T` (e.g., `T001`, `T002`, `T100`).
 
+### 2.2 Board Root Directory Resolution Protocol
+KanbanBoard supports both project-local execution and standalone multi-client `.plugin` execution without requiring a cloned repository:
+
+```
+1. Explicit Override:      KANBAN_BOARD_ROOT environment variable (if set)
+2. Workspace Override:     KANBAN_WORKSPACE_ROOT / "board" (if set)
+3. Project-Local Board:    Current working directory (or any parent) contains "board/"
+4. Project Git Repository: Current working directory (or any parent) contains ".git/"
+5. Standalone Plugin Data: ~/.kanban/board (Path.home() / ".kanban" / "board")
+```
+
+When a user installs the standalone `.plugin` archive without cloning the project source code, MCP clients (Claude Desktop, Antigravity, Codex) and `viewer.py` resolve to `~/.kanban/board`. This guarantees:
+- **Zero Hardcoded Paths**: No dependency on any local folder structure or cloned repository.
+- **Cache Isolation Defense**: User tickets are stored in `~/.kanban/board`, preventing data loss when plugin packages are updated or reinstalled in Claude's internal RPM cache.
+- **Multi-Client Synchronization**: Claude Desktop, Antigravity, and `viewer.py` all access the identical unified board automatically.
+
 ---
 
 ## 3. Concurrency & Inter-Process Mutex Protocol
