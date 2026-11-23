@@ -25,36 +25,75 @@ details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-
 .more{font:inherit;font-size:11px;color:var(--accent);background:none;border:1px dashed var(--line);border-radius:4px;padding:3px;cursor:pointer;width:100%}.more:hover{border-color:var(--accent)}
 button{font:inherit;cursor:pointer}button:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #error{margin:8px 0 0;color:var(--bad)}#error:empty{display:none}
-body.has-detail main{padding-bottom:min(52vh, 520px)}
-.detail{position:fixed;inset:auto 0 0 0;width:100%;height:min(50vh, 500px);min-height:220px;max-height:85vh;z-index:100;display:flex;flex-direction:column;background:var(--panel);border-top:2px solid var(--line);box-shadow:0 -6px 24px #0007;resize:vertical}
+body.has-detail main{padding-bottom:min(55vh, 550px)}
+.detail{position:fixed;inset:auto 0 0 0;width:100%;height:min(55vh, 550px);min-height:260px;max-height:88vh;z-index:100;display:flex;flex-direction:column;background:var(--panel);border-top:2px solid var(--line);box-shadow:0 -8px 30px #0008;resize:vertical}
 .detail[hidden]{display:none!important}
-.detail-bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;background:color-mix(in srgb,var(--panel) 95%,var(--bg));border-bottom:1px solid var(--line);padding:8px 18px;flex-shrink:0}
-.detail-title-group{display:flex;align-items:center;gap:12px;min-width:0}
-.detail-ref{font:11px/1 ui-monospace,Consolas,monospace;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);padding:3px 7px;border-radius:4px;white-space:nowrap}
+.detail-bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;background:color-mix(in srgb,var(--panel) 96%,var(--bg));border-bottom:1px solid var(--line);padding:8px 18px;flex-shrink:0;gap:12px}
+.detail-title-group{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.detail-breadcrumb{font-size:11px;color:var(--muted);font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.detail-ref{font:11px/1 ui-monospace,Consolas,monospace;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:3px 7px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.detail-ref:hover{background:color-mix(in srgb,var(--accent) 25%,transparent)}
 .detail-title{font-size:15px;font-weight:750;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.detail-close{font:inherit;font-size:12px;font-weight:700;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:all .15s}
+.detail-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.detail-close{font:inherit;font-size:12px;font-weight:700;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:all .15s}
 .detail-close:hover{background:var(--bad);color:#fff;border-color:var(--bad)}
-.detail-content{flex:1;overflow-y:auto;padding:14px 18px 24px;display:grid;grid-template-columns:minmax(280px, 340px) 1fr;gap:18px}
-@media (max-width:850px){.detail-content{grid-template-columns:1fr}}
+.detail-content{flex:1;overflow-y:auto;padding:14px 18px 24px;display:grid;grid-template-columns:minmax(320px, 380px) 1fr;gap:18px}
+@media (max-width:900px){.detail-content{grid-template-columns:1fr}}
 .detail-sidebar{display:flex;flex-direction:column;gap:12px}
-.detail-section{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:8px 12px}
-.detail-label{font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
-.detail-val{font-size:12px}
-.status-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:750;color:#fff;background:var(--status-color);text-transform:uppercase}
-.lease-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-top:3px}
-.lease-active{background:color-mix(in srgb,var(--s-done) 20%,transparent);color:var(--s-done);border:1px solid var(--s-done)}
-.lease-expired{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad);border:1px solid var(--bad)}
-.lease-unclaimed{background:color-mix(in srgb,var(--muted) 20%,transparent);color:var(--muted);border:1px solid var(--line)}
-.detail-sub{color:var(--muted);font-size:10px;margin-top:2px}
-.files-list,.attachments-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
-.file-item{font:11px/1.35 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:2px 6px;overflow-wrap:anywhere}
-.attachment-item{font-size:11px;padding:2px 0}
-.att-name{font-weight:600;color:var(--accent)}
-.att-desc{color:var(--muted)}
-.detail-main{display:flex;flex-direction:column;min-width:0}
-.detail-body-box{display:flex;flex-direction:column;flex:1}
-.ticket-body-pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:10px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font:12px/1.45 ui-monospace,Consolas,monospace;margin:0;flex:1;overflow:auto}
-.detail .dep{margin:3px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px;cursor:pointer}
+.detail-card{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:10px 12px;box-shadow:var(--shadow)}
+.detail-card-head{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.status-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:800;color:#fff;background:var(--status-color);text-transform:uppercase}
+.owner-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px}
+.owner-full{grid-column:1 / -1}
+.owner-prop{display:flex;flex-direction:column;gap:2px}
+.owner-key{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.owner-val{font-size:12px;font-weight:600}
+.owner-val.agent-name{font-size:13px;color:var(--text);font-weight:750}
+.session-box{font:10px/1.3 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:3px 6px;display:flex;align-items:center;justify-content:space-between;gap:6px;overflow:hidden;text-overflow:ellipsis}
+.session-id-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-copy-mini{font:inherit;font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--line);border-radius:3px;cursor:pointer;color:var(--muted)}
+.btn-copy-mini:hover{color:var(--text);border-color:var(--accent)}
+.lease-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:750}
+.lease-active{background:color-mix(in srgb,var(--s-done) 18%,transparent);color:var(--s-done);border:1px solid var(--s-done)}
+.lease-expired{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad);border:1px solid var(--bad)}
+.lease-unclaimed{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted);border:1px solid var(--line)}
+.files-scroll{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;margin-top:4px}
+.file-entry{font:11px/1.3 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:3px 7px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.file-entry:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--panel))}
+.file-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-entry{font-size:11px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.att-entry:last-child{border-bottom:none}
+.att-title{font-weight:650;color:var(--accent)}
+.att-desc{color:var(--muted);font-size:10px;margin-top:2px}
+.note-quote{font-size:12px;font-style:italic;color:var(--text);border-left:3px solid var(--accent);padding:4px 8px;background:color-mix(in srgb,var(--accent) 5%,var(--panel));border-radius:0 4px 4px 0}
+.detail-main{display:flex;flex-direction:column;min-width:0;height:100%}
+.spec-box{border:1px solid var(--line);border-radius:6px;background:var(--bg);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:var(--shadow)}
+.spec-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:color-mix(in srgb,var(--panel) 80%,var(--bg));border-bottom:1px solid var(--line)}
+.spec-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.btn-toggle-raw{font:inherit;font-size:10px;padding:2px 7px;background:var(--bg);border:1px solid var(--line);border-radius:4px;cursor:pointer;color:var(--muted)}
+.btn-toggle-raw:hover{color:var(--text)}
+.spec-render{padding:14px 18px;overflow-y:auto;flex:1;font-size:12px;line-height:1.5}
+.spec-header{font-size:13px;font-weight:750;color:var(--accent);margin:14px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line)}
+.spec-header:first-child{margin-top:0}
+.spec-sub{font-size:12px;font-weight:700;color:var(--text);margin:10px 0 4px}
+.spec-p{margin:4px 0 8px;color:var(--text)}
+.bullet-item{margin:2px 0 2px 12px;color:var(--text)}
+.bullet-item.indent-1{margin-left:24px}
+.bullet-item.indent-2{margin-left:36px}
+.todo-item{display:flex;align-items:baseline;gap:6px;margin:3px 0 3px 6px;padding:2px 4px;border-radius:4px}
+.todo-item.indent-1{margin-left:18px}
+.todo-item.indent-2{margin-left:32px}
+.todo-item.indent-3{margin-left:46px}
+.todo-done{color:var(--muted);text-decoration:line-through}
+.todo-done .badge-acc,.todo-done .badge-chosen{text-decoration:none}
+.todo-check{font-weight:bold;font-size:12px;color:var(--s-done)}
+.todo-open .todo-check{color:var(--muted)}
+.badge-acc{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);border:1px solid var(--warn);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.badge-chosen{background:color-mix(in srgb,var(--proj) 20%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
+.code-block{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:8px 12px;margin:6px 0;font:11px/1.4 ui-monospace,Consolas,monospace;overflow-x:auto}
+.ticket-body-raw{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 16px;border:none;background:transparent;font:12px/1.45 ui-monospace,Consolas,monospace;margin:0;flex:1;overflow:auto}
+.detail .dep{margin:3px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px}
+.detail .dep:hover{border-color:var(--accent)}
 .empty-state{padding:24px;border:1px solid var(--line);border-radius:7px;background:var(--panel);text-align:center}
 </style>
 </head>
@@ -154,6 +193,86 @@ function ticketCard(ticket, issues) {
   return card;
 }
 
+function copyText(str, btn) {
+  if (!navigator.clipboard) return;
+  navigator.clipboard.writeText(str).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = "✓";
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+}
+
+function renderMarkdownBody(text) {
+  if (!text) return '<div class="empty-note">(empty body)</div>';
+  const clean = text.trim();
+  const escapeHtml = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  let html = "";
+  const lines = clean.split("\n");
+  let inCode = false, codeLang = "", codeLines = [];
+
+  for (let line of lines) {
+    if (line.startsWith("```")) {
+      if (inCode) {
+        html += `<pre class="code-block"><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
+        codeLines = [];
+        inCode = false;
+      } else {
+        inCode = true;
+        codeLang = line.slice(3).trim();
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      html += `<h3 class="spec-header">${escapeHtml(line.slice(3))}</h3>`;
+      continue;
+    }
+    if (line.startsWith("### ")) {
+      html += `<h4 class="spec-sub">${escapeHtml(line.slice(4))}</h4>`;
+      continue;
+    }
+
+    const todoMatch = line.match(/^(\s*)-\s*\[([ xX])\]\s*(.*)$/);
+    if (todoMatch) {
+      const indent = Math.floor(todoMatch[1].length / 2);
+      const isChecked = todoMatch[2].toLowerCase() === "x";
+      let taskText = escapeHtml(todoMatch[3]);
+      taskText = taskText.replace(/\[ACCEPTANCE\]/g, '<span class="badge-acc">[ACCEPTANCE]</span>');
+      taskText = taskText.replace(/\[CHOSEN\]/g, '<span class="badge-chosen">[CHOSEN]</span>');
+      taskText = taskText.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html += `<div class="todo-item indent-${indent} ${isChecked ? 'todo-done' : 'todo-open'}">
+        <span class="todo-check">${isChecked ? '☑' : '☐'}</span>
+        <span class="todo-text">${taskText}</span>
+      </div>`;
+      continue;
+    }
+
+    const listMatch = line.match(/^(\s*)-\s*(.*)$/);
+    if (listMatch) {
+      const indent = Math.floor(listMatch[1].length / 2);
+      let itemText = escapeHtml(listMatch[2]);
+      itemText = itemText.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html += `<div class="bullet-item indent-${indent}">• ${itemText}</div>`;
+      continue;
+    }
+
+    if (line.trim()) {
+      let pText = escapeHtml(line);
+      pText = pText.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html += `<p class="spec-p">${pText}</p>`;
+    }
+  }
+  if (inCode && codeLines.length) {
+    html += `<pre class="code-block"><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
+  }
+  return html;
+}
+
 function openDetail(reference, focus = false) {
   const ticket = ticketIndex.get(reference), panel = $("detail");
   if (!ticket) { closeDetail(); return; }
@@ -162,13 +281,26 @@ function openDetail(reference, focus = false) {
   panel.hidden = false;
   document.body.classList.add("has-detail");
 
-  // Sticky top bar: Title, Ref, and Close button ALWAYS in view at top right
+  // Sticky top bar: Title, Breadcrumb, Ref, and Close button ALWAYS in view at top right
   const bar = add(panel, "div", "detail-bar");
   const titleGroup = add(bar, "div", "detail-title-group");
-  add(titleGroup, "span", "detail-ref", reference);
+
+  const parts = reference.split("/");
+  if (parts.length >= 2) {
+    add(titleGroup, "span", "detail-breadcrumb", parts.slice(0, 2).join(" › "));
+  }
+
+  const refBadge = add(titleGroup, "span", "detail-ref", ticket.id || reference);
+  refBadge.title = "Click to copy ticket reference";
+  refBadge.onclick = () => copyText(reference, refBadge);
+
+  const statusBadge = add(titleGroup, "span", "status-pill", ticket.status);
+  statusBadge.dataset.status = ticket.status;
+
   add(titleGroup, "h2", "detail-title", ticket.title || "Ticket");
 
-  const close = add(bar, "button", "detail-close", "✕ Close");
+  const actions = add(bar, "div", "detail-actions");
+  const close = add(actions, "button", "detail-close", "✕ Close");
   close.type = "button";
   close.title = "Close (Esc)";
   close.onclick = closeDetail;
@@ -178,85 +310,128 @@ function openDetail(reference, focus = false) {
   const sidebar = add(content, "div", "detail-sidebar");
   const mainArea = add(content, "div", "detail-main");
 
-  // 1. Status Section
-  const sBox = add(sidebar, "div", "detail-section");
-  add(sBox, "div", "detail-label", "Status");
-  const sVal = add(sBox, "div", "detail-val");
-  const sBadge = add(sVal, "span", "status-badge", ticket.status);
-  sBadge.dataset.status = ticket.status;
-  if (ticket.since) add(sVal, "span", "detail-sub", " (since " + ticket.since + ")");
+  // 1. Ownership & Multi-Agent Lease Subsystem Card
+  const oCard = add(sidebar, "div", "detail-card");
+  const oHead = add(oCard, "div", "detail-card-head");
+  oHead.innerHTML = `<span>👤 Ownership &amp; Lease Control</span>`;
 
-  // 2. Ownership & Lease Section
-  if (ticket.owner && ticket.owner.agent) {
-    const oBox = add(sidebar, "div", "detail-section");
-    add(oBox, "div", "detail-label", "Ownership & Lease");
-    const oVal = add(oBox, "div", "detail-val");
-    add(oVal, "div", "owner-name", "👤 " + ticket.owner.agent);
-
-    if (ticket.lease_status) {
-      const isExpired = ticket.lease_status.includes("expired");
-      const isUnclaimed = ticket.lease_status.includes("unclaimed");
-      const badgeCls = isExpired ? "lease-expired" : (isUnclaimed ? "lease-unclaimed" : "lease-active");
-      add(oVal, "span", "lease-badge " + badgeCls, ticket.lease_status);
-    }
-    if (ticket.owner.claimed_at) {
-      add(oVal, "div", "detail-sub", "Claimed: " + ticket.owner.claimed_at);
-    }
-    if (ticket.owner.lease_expires) {
-      add(oVal, "div", "detail-sub", "Expires: " + ticket.owner.lease_expires);
-    }
-    if (ticket.owner.session_id) {
-      add(oVal, "div", "detail-sub", "Session: " + ticket.owner.session_id);
-    }
+  if (ticket.lease_status) {
+    const isExpired = ticket.lease_status.includes("expired");
+    const isUnclaimed = ticket.lease_status.includes("unclaimed");
+    const badgeCls = isExpired ? "lease-expired" : (isUnclaimed ? "lease-unclaimed" : "lease-active");
+    add(oHead, "span", "lease-badge " + badgeCls, ticket.lease_status);
   }
 
-  // 3. Tracked Files
-  if (ticket.files && ticket.files.length) {
-    const fBox = add(sidebar, "div", "detail-section");
-    add(fBox, "div", "detail-label", "Tracked Files (" + ticket.files.length + ")");
-    const fList = add(fBox, "div", "files-list");
-    for (const f of ticket.files) {
-      add(fList, "div", "file-item", f);
-    }
+  const oGrid = add(oCard, "div", "owner-grid");
+
+  // Assigned Agent
+  const pAgent = add(oGrid, "div", "owner-prop");
+  add(pAgent, "span", "owner-key", "Assigned Agent");
+  add(pAgent, "span", "owner-val agent-name", ticket.owner && ticket.owner.agent ? "👤 " + ticket.owner.agent : "(unassigned)");
+
+  // State Since
+  const pSince = add(oGrid, "div", "owner-prop");
+  add(pSince, "span", "owner-key", "State Since");
+  add(pSince, "span", "owner-val", ticket.since ? ticket.since.replace("T", " ").replace("Z", "") : "—");
+
+  // Session ID with Copy button
+  if (ticket.owner && ticket.owner.session_id) {
+    const pSess = add(oGrid, "div", "owner-prop owner-full");
+    add(pSess, "span", "owner-key", "Agent Session ID");
+    const sBox = add(pSess, "div", "session-box");
+    add(sBox, "span", "session-id-text", ticket.owner.session_id);
+    const sCopy = add(sBox, "button", "btn-copy-mini", "📋");
+    sCopy.type = "button";
+    sCopy.title = "Copy session ID";
+    sCopy.onclick = () => copyText(ticket.owner.session_id, sCopy);
   }
 
-  // 4. Attachments
-  if (ticket.attachments && ticket.attachments.length) {
-    const aBox = add(sidebar, "div", "detail-section");
-    add(aBox, "div", "detail-label", "Attachments (" + ticket.attachments.length + ")");
-    const aList = add(aBox, "div", "attachments-list");
-    for (const a of ticket.attachments) {
-      const aItem = add(aList, "div", "attachment-item");
-      add(aItem, "span", "att-name", "📎 " + (a.name || a.path));
-      if (a.desc) add(aItem, "span", "att-desc", " — " + a.desc);
-    }
+  // Claimed At & Lease Expires
+  if (ticket.owner && ticket.owner.claimed_at) {
+    const pClaim = add(oGrid, "div", "owner-prop");
+    add(pClaim, "span", "owner-key", "Claimed At");
+    add(pClaim, "span", "owner-val", ticket.owner.claimed_at.replace("T", " ").replace("Z", ""));
+  }
+  if (ticket.owner && ticket.owner.lease_expires) {
+    const pExp = add(oGrid, "div", "owner-prop");
+    add(pExp, "span", "owner-key", "Lease Expires");
+    add(pExp, "span", "owner-val", ticket.owner.lease_expires.replace("T", " ").replace("Z", ""));
   }
 
-  // 5. Note
+  // 2. Progress / Audit Note Card (if set)
   if (ticket.note) {
-    const nBox = add(sidebar, "div", "detail-section");
-    add(nBox, "div", "detail-label", "Note");
-    add(nBox, "div", "detail-val", ticket.note);
+    const nCard = add(sidebar, "div", "detail-card");
+    const nHead = add(nCard, "div", "detail-card-head");
+    nHead.innerHTML = `<span>📝 Progress / QA Note</span>`;
+    add(nCard, "div", "note-quote", ticket.note);
   }
 
-  // 6. Dependencies
+  // 3. Tracked Files Card (if set)
+  if (ticket.files && ticket.files.length) {
+    const fCard = add(sidebar, "div", "detail-card");
+    const fHead = add(fCard, "div", "detail-card-head");
+    fHead.innerHTML = `<span>📁 Tracked Files (${ticket.files.length})</span>`;
+    const fList = add(fCard, "div", "files-scroll");
+    for (const f of ticket.files) {
+      const fItem = add(fList, "div", "file-entry");
+      add(fItem, "span", "file-path", "📄 " + f);
+      const fCopy = add(fItem, "button", "btn-copy-mini", "📋");
+      fCopy.type = "button";
+      fCopy.title = "Copy file path";
+      fCopy.onclick = (e) => { e.stopPropagation(); copyText(f, fCopy); };
+      fItem.onclick = () => copyText(f, fCopy);
+    }
+  }
+
+  // 4. Attachments Card (if set)
+  if (ticket.attachments && ticket.attachments.length) {
+    const aCard = add(sidebar, "div", "detail-card");
+    const aHead = add(aCard, "div", "detail-card-head");
+    aHead.innerHTML = `<span>📎 Attachments (${ticket.attachments.length})</span>`;
+    const aList = add(aCard, "div", "attachments-list");
+    for (const a of ticket.attachments) {
+      const aItem = add(aList, "div", "att-entry");
+      add(aItem, "div", "att-title", "📎 " + (a.name || a.path));
+      if (a.desc) add(aItem, "div", "att-desc", a.desc);
+    }
+  }
+
+  // 5. Dependencies Card (if set)
   if (ticket.depends && ticket.depends.length) {
-    const dBox = add(sidebar, "div", "detail-section");
-    add(dBox, "div", "detail-label", "Depends on");
+    const dCard = add(sidebar, "div", "detail-card");
+    const dHead = add(dCard, "div", "detail-card-head");
+    dHead.innerHTML = `<span>🔗 Dependencies</span>`;
+    const dWrap = add(dCard, "div", "deps-wrap");
     for (const ref of ticket.depends) {
       const target = ticketIndex.get(ref);
-      const button = add(dBox, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
+      const button = add(dWrap, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
       button.type = "button";
       button.disabled = !target;
       button.onclick = () => openDetail(ref, true);
     }
   }
 
-  // Main Area: Ticket Body (Leading empty space stripped cleanly!)
-  const bBox = add(mainArea, "div", "detail-body-box");
-  add(bBox, "div", "detail-label", "Ticket Body");
-  const cleanBody = ticket.body ? ticket.body.trim() : "(empty)";
-  add(bBox, "pre", "ticket-body-pre", cleanBody);
+  // Right Side: Specification Box
+  const specBox = add(mainArea, "div", "spec-box");
+  const specBar = add(specBox, "div", "spec-bar");
+  add(specBar, "span", "spec-title", "Ticket Specification & Execution Plan");
+
+  const toggleRaw = add(specBar, "button", "btn-toggle-raw", "Raw Markdown");
+  toggleRaw.type = "button";
+
+  const renderView = add(specBox, "div", "spec-render");
+  renderView.innerHTML = renderMarkdownBody(ticket.body || "");
+
+  const rawView = add(specBox, "pre", "ticket-body-raw");
+  rawView.textContent = ticket.body ? ticket.body.trim() : "(empty body)";
+  rawView.hidden = true;
+
+  toggleRaw.onclick = () => {
+    const showRaw = rawView.hidden;
+    rawView.hidden = !showRaw;
+    renderView.hidden = showRaw;
+    toggleRaw.textContent = showRaw ? "Formatted View" : "Raw Markdown";
+  };
 
   if (focus) close.focus();
 }
