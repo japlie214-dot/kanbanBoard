@@ -1465,6 +1465,16 @@ def main():
     p_list.add_argument("-e", "--epic", default=None)
     p_list.add_argument("-s", "--status", default=None)
 
+    p_doc = sub.add_parser("doc", help="Read or write project/epic documentation")
+    p_doc.add_argument("project", help="Project slug")
+    p_doc.add_argument("name", help="Document name/slug")
+    p_doc.add_argument("-e", "--epic", default=None, help="Optional epic slug")
+    p_doc.add_argument("-w", "--write", default=None, help="Content to write (omit to read)")
+
+    p_serve = sub.add_parser("serve", help="Run live local loopback web dashboard")
+    p_serve.add_argument("--port", type=int, default=7890, help="Port to listen on (default 7890)")
+    p_serve.add_argument("--no-browser", action="store_true", help="Do not open browser")
+
     sub.add_parser("lint", help="Lint board health")
 
     args = parser.parse_args()
@@ -1502,6 +1512,16 @@ def main():
         elif args.command == "list":
             tickets = api_list(board, args.project, args.epic, args.status)
             print(json.dumps(tickets, indent=2))
+        elif args.command == "doc":
+            action = "write" if args.write is not None else "read"
+            res = api_doc(action, args.project, args.epic, args.name, content=args.write or "", board=board)
+            if action == "read":
+                print(res.get("content", ""))
+            else:
+                print(f"Wrote {res.get('doc', args.name)} [{res.get('path', '')}]")
+        elif args.command == "serve":
+            import viewer
+            viewer.run_server(board, port=args.port, open_browser=not args.no_browser)
         elif args.command == "lint":
             res = api_lint(board)
             print(json.dumps(res, indent=2))
