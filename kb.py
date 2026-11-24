@@ -356,28 +356,61 @@ def _parse_after_expr(expr: str) -> list[dict]:
 def parse_execution_log(text: str) -> dict[str, list[dict]]:
     """Parse append-only ## Execution Log entries keyed by node_id.
 
-    Expected line format:
+    Supports canonical timestamped format:
       - [2026-11-23 07:00 UTC] [DONE] A1 | proof: <evidence>
       - [2026-11-23 07:01 UTC] [SKIP] C1 | reason: <branch decision>
+
+    And lenient human/agent formats:
+      - Node A1: <evidence>
+      - [A1]: <evidence> or - [x] A1: <evidence>
+      - - A1 | proof: <evidence>
+      - - Node A1 (DONE): <evidence>
     """
     m = EXEC_LOG_SECTION_RE.search(text)
     if not m:
         return {}
     entries: dict[str, list[dict]] = {}
-    line_re = re.compile(
+    
+    # 1. Primary canonical line format
+    canonical_re = re.compile(
         r'^-\s*\[(?P<ts>[^\]]+)\]\s*\[(?P<kind>DONE|SKIP|UNCHECK)\]\s*(?P<nid>[A-Za-z0-9._-]+)\s*\|\s*(?P<detail>.*)$',
         re.I,
     )
+    # 2. Lenient human / agent formats
+    lenient_re = re.compile(
+        r'^-\s*(?:\[(?P<box>[xX -])\]\s*)?(?:Node\s+)?\[?(?P<nid>[A-Za-z0-9._-]+)\]?(?:\s*\((?P<kind>DONE|SKIP|UNCHECK)\))?\s*(?::|\|)\s*(?P<detail>.*)$',
+        re.I,
+    )
+
     for line in m.group(1).splitlines():
-        lm = line_re.match(line.strip())
-        if not lm:
+        line_str = line.strip()
+        if not line_str or not line_str.startswith("-"):
             continue
-        nid = lm.group("nid").strip()
-        entries.setdefault(nid, []).append({
-            "timestamp": lm.group("ts").strip(),
-            "kind": lm.group("kind").upper(),
-            "detail": lm.group("detail").strip(),
-        })
+        
+        lm = canonical_re.match(line_str)
+        if lm:
+            nid = lm.group("nid").strip()
+            entries.setdefault(nid, []).append({
+                "timestamp": lm.group("ts").strip(),
+                "kind": lm.group("kind").upper(),
+                "detail": lm.group("detail").strip(),
+            })
+            continue
+
+        lm_lenient = lenient_re.match(line_str)
+        if lm_lenient:
+            nid = lm_lenient.group("nid").strip()
+            box = lm_lenient.group("box")
+            kind_explicit = lm_lenient.group("kind")
+            kind = kind_explicit.upper() if kind_explicit else ("SKIP" if box == "-" else "DONE")
+            detail = lm_lenient.group("detail").strip()
+            # Strip redundant 'proof:' or 'reason:' prefix if present
+            detail = re.sub(r'^(?:proof|reason)\s*:\s*', '', detail, flags=re.I).strip()
+            entries.setdefault(nid, []).append({
+                "timestamp": "recorded",
+                "kind": kind,
+                "detail": detail,
+            })
     return entries
 
 
@@ -885,7 +918,58 @@ def next_ticket_id(project: str, epic: str, board: Path) -> str:
     return f"T{highest + 1:03d}"
 
 
-def api_create(ref: str, title: str, board: Path) -> dict:
+SCAFFOLD_PATTERNS = {
+    "agile": (
+        "## Plan (Todo Tree)\n"
+        "- [ ] A1 [START] [lane:main] Probe environment, dependencies & verify baseline assumptions\n"
+        "- [ ] B1 [lane:fast] [after:A1] [when:if(fast_path_viable):fork1] Fast-path primary implementation\n"
+        "- [ ] B2 [lane:fallback] [after:A1] [when:else(fast_path_viable):fork1] Fallback/contingency polyfill implementation\n"
+        "- [ ] A2 [lane:main] [after:B1|B2] Integrate core solution with chosen branch\n"
+        "- [ ] P1 [lane:test] [after:A1] [parallel] Draft test suite, boundary cases & negative discriminator probes\n"
+        "- [ ] T1 [lane:test] [after:A2,P1] [ACCEPTANCE:MANDATORY] Positive functional requirements verified and regression tests pass\n"
+        "- [ ] T2 [lane:test] [after:A2,P1] [parallel] [ACCEPTANCE:MANDATORY] Negative Discriminator: Malformed inputs and edge-case faults rejected cleanly\n"
+        "- [ ] O1 [lane:polish] [after:A2] [optional] Performance optimization, caching, or visual polish enhancement\n"
+        "- [ ] O2 [lane:polish] [after:O1] [ACCEPTANCE:OPTIONAL] Optional polish enhancement verified\n"
+        "- [ ] T3 [lane:docs] [after:T1,T2,O2?] [ACCEPTANCE:MANDATORY] Synchronize living architecture documentation in epic.md"
+    ),
+    "feature": (
+        "## Plan (Todo Tree)\n"
+        "- [ ] A1 [START] [lane:core] Implement core feature logic and public interfaces\n"
+        "- [ ] A2 [lane:core] [after:A1] Integrate validation guardrails and state handling\n"
+        "- [ ] B1 [lane:test] [after:A1] [parallel] Author unit and integration regression test suite\n"
+        "- [ ] T1 [lane:test] [after:A2,B1] [ACCEPTANCE:MANDATORY] Positive functional verification and automated test pass\n"
+        "- [ ] T2 [lane:test] [after:A2,B1] [parallel] [ACCEPTANCE:MANDATORY] Negative Discriminator: Invalid inputs and unauthorized actions rejected\n"
+        "- [ ] T3 [lane:docs] [after:T1,T2] [ACCEPTANCE:MANDATORY] Update epic.md living architecture documentation"
+    ),
+    "spike": (
+        "## Plan (Todo Tree)\n"
+        "- [ ] S1 [START] [lane:spike] Feasibility spike: probe target API, performance limits and constraints\n"
+        "- [ ] S2 [lane:spike] [after:S1] Benchmark alternative solutions and identify trade-offs\n"
+        "- [ ] B1 [lane:arch] [after:S2] [when:if(viable):eval] Author architectural decision record (ADR) adopting approach\n"
+        "- [ ] B2 [lane:arch] [after:S2] [when:else(viable):eval] Author spike findings recommending alternative or deferral\n"
+        "- [ ] A1 [lane:arch] [after:B1|B2] [ACCEPTANCE:MANDATORY] Architecture decision documented with concrete recommendations"
+    ),
+    "refactor": (
+        "## Plan (Todo Tree)\n"
+        "- [ ] 1. [START] [lane:guard] Establish baseline regression snapshot tests before refactoring\n"
+        "- [ ] 2. [lane:refactor] [after:1] Perform modular refactoring isolating components\n"
+        "- [ ] 3. [lane:refactor] [after:2] Modernize internal data structures and eliminate dead code\n"
+        "- [ ] 4. [lane:test] [after:3] [ACCEPTANCE:MANDATORY] Ponytail Zero-Diff: All baseline snapshot tests pass with identical external behavior\n"
+        "- [ ] 5. [lane:docs] [after:4] [ACCEPTANCE:MANDATORY] Update architectural documentation and code comments"
+    )
+}
+
+
+def api_scaffold_dag(pattern: str = "agile", goal: str = "", lanes: Optional[list[str]] = None) -> str:
+    """Generate a pre-validated, mathematically compliant Agile DAG Todo Tree template."""
+    pat = pattern.lower().strip() if pattern else "agile"
+    if pat not in SCAFFOLD_PATTERNS:
+        valid_pats = ", ".join(SCAFFOLD_PATTERNS.keys())
+        raise ValueError(f"Unknown scaffold pattern '{pattern}'. Available: {valid_pats}")
+    return SCAFFOLD_PATTERNS[pat]
+
+
+def api_create(ref: str, title: str, board: Path, pattern: str = "agile", plan: Optional[str] = None) -> dict:
     parts = ref.strip().split('/')
     if len(parts) == 2:
         project, epic = parts
@@ -914,6 +998,10 @@ def api_create(ref: str, title: str, board: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     today = datetime.date.today().isoformat()
 
+    plan_str = plan.strip() if plan and plan.strip() else api_scaffold_dag(pattern)
+    if not plan_str.startswith("## Plan (Todo Tree)"):
+        plan_str = f"## Plan (Todo Tree)\n{plan_str}"
+
     template_body = (
         "\n## Outcome\n"
         "Describe the observable result from a user or system perspective after this ticket is complete.\n\n"
@@ -922,13 +1010,7 @@ def api_create(ref: str, title: str, board: Path) -> dict:
         "  - `src/...`\n"
         "- Explicitly out of scope:\n"
         "  - `...`\n\n"
-        "## Plan (Todo Tree)\n"
-        "- [ ] A1 [START] [lane:A] Task definition & pre-flight context verified\n"
-        "- [ ] A2 [lane:A] [after:A1] Core feature implementation\n"
-        "- [ ] A3 [lane:A] [after:A2] Living documentation & architecture sync (epic.md/ADR)\n"
-        "- [ ] A4 [lane:A] [after:A3] [ACCEPTANCE:MANDATORY] Observable requirement verified\n"
-        "- [ ] B1 [lane:B] [after:A1] [parallel] Automated regression tests & edge-case coverage\n"
-        "- [ ] B2 [lane:B] [after:B1] [ACCEPTANCE:MANDATORY] Test suite passes cleanly\n\n"
+        f"{plan_str}\n\n"
         "## Prove\n"
         "Exact commands and expected output:\n"
         "```bash\n"
@@ -1641,20 +1723,20 @@ def api_qa_approve(ref: str, nonce: str, evidence_path: str, note: str, board: P
     if not ev_p.exists():
         raise FileNotFoundError(f"QA Evidence file not found: {evidence_path}")
 
-    # Substantive content check on evidence report
+    # Substantive content check on evidence report with flexible regex matching
     ev_text = ev_p.read_text(encoding="utf-8")
-    required_evidence_sections = (
-        "Process & Checkpoint Audit",
-        "Diff",
-        "Living Architecture",
-        "Positive Tests",
-        "Negative Discriminator Tests",
-        "PASS",
-    )
-    for section_kw in required_evidence_sections:
-        if section_kw.lower() not in ev_text.lower():
+    required_patterns = [
+        (re.compile(r"process\s*(?:&|and)?\s*checkpoint(?:\s*execution)?\s*audit", re.I), "Process & Checkpoint Audit"),
+        (re.compile(r"(?:minimal\s*)?diff(?:\s*review)?", re.I), "Diff Review"),
+        (re.compile(r"living\s*architecture", re.I), "Living Architecture"),
+        (re.compile(r"positive\s*tests?", re.I), "Positive Tests"),
+        (re.compile(r"negative\s*(?:discriminator)?\s*(?:tests?|verification)", re.I), "Negative Discriminator Tests"),
+        (re.compile(r"\bPASS\b", re.I), "PASS verdict"),
+    ]
+    for pat, label in required_patterns:
+        if not pat.search(ev_text):
             raise ValueError(
-                f"QA Evidence report fails audit: Missing required section or verdict '{section_kw}'. "
+                f"QA Evidence report fails audit: Missing required section or verdict '{label}'. "
                 f"Report must contain Process & Checkpoint Audit, Diff Review, Living Architecture, "
                 f"Positive Tests, Negative Discriminator Tests, and PASS."
             )
@@ -1945,6 +2027,10 @@ def main():
     p_create = sub.add_parser("create", help="Create a ticket in backlog")
     p_create.add_argument("ref", help="project/epic/Tnnn")
     p_create.add_argument("title", help="One-line summary")
+    p_create.add_argument("--pattern", choices=list(SCAFFOLD_PATTERNS.keys()), default="agile", help="DAG template pattern")
+
+    p_scaffold = sub.add_parser("scaffold", help="Generate an agile DAG Todo Tree template")
+    p_scaffold.add_argument("--pattern", choices=list(SCAFFOLD_PATTERNS.keys()), default="agile", help="DAG template pattern")
 
     p_move = sub.add_parser("move", help="Move ticket through lifecycle")
     p_move.add_argument("ref", help="Ticket ref")
@@ -2003,8 +2089,11 @@ def main():
             api_init(args.project, args.epic, board)
             print(f"Initialized board and project '{args.project}' at {board / args.project}")
         elif args.command == "create":
-            res = api_create(args.ref, args.title, board)
+            res = api_create(args.ref, args.title, board, pattern=args.pattern)
             print(f"Created {res['ref']} in backlog [{res['path']}]")
+        elif args.command == "scaffold":
+            dag = api_scaffold_dag(args.pattern)
+            print(dag)
         elif args.command == "move":
             res = api_move(args.ref, args.status, args.note, board, agent_id=args.agent, force=args.force)
             print(f"Moved {res['ref']}: {res['from']} -> {res['to']}")

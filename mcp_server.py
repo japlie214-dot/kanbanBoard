@@ -47,22 +47,27 @@ TOOLS = [
     },
     {
         "name": "kanban_ticket",
-        "description": "Create, inspect, or edit tickets. Use action='create' (or provide 'title') to create a backlog ticket; action='show' (default when title/edit fields omitted) to inspect; action='edit' to update Outcome, Scope, Plan (Todo Tree), Prove, or full body without raw file edits.",
+        "description": "Create, inspect, scaffold, or edit tickets. Use action='create' (or provide 'title') to create a backlog ticket; action='scaffold' to generate an agile DAG template; action='show' to inspect; action='edit' to update Outcome, Scope, Plan (Todo Tree), Prove, or full body.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["show", "create", "edit"],
+                    "enum": ["show", "create", "edit", "scaffold"],
                     "description": "Explicit mode (optional; inferred from title/edit fields if omitted)"
                 },
                 "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
                 "project": {"type": "string", "description": "Project slug (when creating without explicit ref)"},
                 "epic": {"type": "string", "description": "Epic slug (when creating without explicit ref)"},
                 "title": {"type": "string", "description": "Ticket title (required for action='create')"},
+                "pattern": {
+                    "type": "string",
+                    "enum": ["agile", "feature", "spike", "refactor"],
+                    "description": "DAG template pattern when scaffolding or creating (default: agile)"
+                },
                 "outcome": {"type": "string", "description": "Updated ## Outcome content (for action='edit')"},
                 "scope": {"type": "string", "description": "Updated ## Scope content (for action='edit')"},
-                "plan": {"type": "string", "description": "Updated ## Plan (Todo Tree) DAG content (for action='edit')"},
+                "plan": {"type": "string", "description": "Updated ## Plan (Todo Tree) DAG content (for action='edit' or 'create')"},
                 "prove": {"type": "string", "description": "Updated ## Prove content (for action='edit')"},
                 "body": {"type": "string", "description": "Full replacement markdown body (for action='edit')"}
             }
@@ -267,10 +272,16 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             project = args.get("project")
             epic = args.get("epic", "core")
             title = args.get("title")
+            pattern = args.get("pattern", "agile")
             edit_fields = {
                 k: args.get(k) for k in ("outcome", "scope", "plan", "prove", "body")
                 if args.get(k) is not None
             }
+
+            if action == "scaffold":
+                dag_template = kb.api_scaffold_dag(pattern)
+                send_tool_result(req_id, dag_template)
+                return
 
             if not action:
                 if title:
@@ -291,8 +302,9 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 if not title:
                     send_tool_result(req_id, "Error: 'title' is required when creating a ticket.", is_error=True)
                     return
-                res = kb.api_create(ref, title, board)
-                text = f"Created ticket {res['ref']} in backlog [{res['path']}]\n"
+                plan_custom = args.get("plan")
+                res = kb.api_create(ref, title, board, pattern=pattern, plan=plan_custom)
+                text = f"Created ticket {res['ref']} in backlog [{res['path']}] with pattern '{pattern}'\n"
                 text += "Use kanban_ticket(action='edit', ref=..., outcome=..., scope=..., plan=..., prove=...) before moving to in-progress."
                 send_tool_result(req_id, text)
             elif action == "edit":

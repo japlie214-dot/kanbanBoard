@@ -84,3 +84,13 @@ The state engine strictly enforces quality standards in code:
 3. **No hand-edits to YAML status:** Always use MCP tools.
 4. **Never skip living documentation:** Update `epic.md`/`project.md` whenever interfaces, dependencies, or contracts change.
 5. **Never bulk-check checkboxes without execution proofs:** Every completed checkpoint must have evidence in `## Execution Log`.
+
+---
+
+## Agile DAG Planning & Parallel Execution Rules
+1. **Never Default to Fragile Linear Waterfall Plans**: Non-trivial tickets (`in-progress`) must account for real-world uncertainty by incorporating at least one contingency branch (`[when:if/else]`), parallel lane (`[parallel]`), or fallback join (`[after:A|B]`).
+2. **Instant Scaffolding**: Never write complex DAG syntax manually from scratch. Use `kanban_ticket(action="scaffold", pattern="agile")` or specify `pattern="agile|feature|spike|refactor"` during creation.
+3. **Behavior on `[parallel]` Lanes**:
+   - In Antigravity / Swarm: Coordinators may delegate unblocked parallel lanes (`ready_nodes`) to subagents via `invoke_subagent`.
+   - In Standalone CLI (Claude Code / Codex): The agent must batch independent tool calls and non-blockingly switch between parallel lanes without retreating.
+4. **Dynamic In-Flight Pivoting**: When an environmental probe or condition test fails, do not retreat or re-plan from scratch. Skip the untaken branch cleanly via `kanban_update(skip_nodes=[...], skip_reason="...")` and proceed to the fallback branch.

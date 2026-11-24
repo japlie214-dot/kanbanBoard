@@ -438,6 +438,86 @@ class TestKanbanCore(unittest.TestCase):
         self.assertEqual(rej["to"], "in-progress")
         self.assertIn("Found a bug in step A2", rej["note"])
 
+    def test_lenient_execution_log_scaffolding_and_fuzzy_qa(self):
+        """Verify lenient execution log parsing, DAG scaffolding templates, and fuzzy QA header matching."""
+        # 1. Lenient execution log parsing
+        sample_log = (
+            "## Execution Log\n"
+            "- [2026-11-23 08:00 UTC] [DONE] A1 | proof: canonical evidence A1\n"
+            "- Node A2: human formatted evidence A2\n"
+            "- [B1]: evidence for node B1\n"
+            "- [x] B2: evidence for node B2\n"
+            "- Node C1 (SKIP): skipped branch C1\n"
+        )
+        parsed = kb.parse_execution_log(sample_log)
+        self.assertIn("A1", parsed)
+        self.assertIn("A2", parsed)
+        self.assertIn("B1", parsed)
+        self.assertIn("B2", parsed)
+        self.assertIn("C1", parsed)
+        self.assertEqual(parsed["A2"][0]["kind"], "DONE")
+        self.assertEqual(parsed["C1"][0]["kind"], "SKIP")
+        self.assertEqual(parsed["A2"][0]["detail"], "human formatted evidence A2")
+
+        # 2. Scaffolding templates
+        for pat in ["agile", "feature", "spike", "refactor"]:
+            scaffold = kb.api_scaffold_dag(pat)
+            self.assertIn("[START]", scaffold)
+            self.assertIn("[ACCEPTANCE", scaffold)
+            nodes, err = kb.parse_todo_tree(scaffold)
+            self.assertEqual(err, "")
+            self.assertIsNotNone(nodes)
+            valid, msg = kb.validate_todo_tree(nodes, for_inprogress=True, body=scaffold)
+            self.assertTrue(valid, f"Pattern '{pat}' failed validation: {msg}")
+
+        # 3. Create ticket with default agile scaffolding
+        t = kb.api_create("ux/core/T002", "Scaffolded ticket test", self.board, pattern="agile")
+        self.assertEqual(t["status"], "backlog")
+        show = kb.api_show("ux/core/T002", self.board)
+        self.assertIn("## Plan (Todo Tree)", show["body"])
+        self.assertIn("[when:if(fast_path_viable):fork1]", show["body"])
+
+        # 4. Fuzzy QA section matching
+        fuzzy_evidence = (
+            "# QA Report\n\n"
+            "## 0. Process & Checkpoint Execution Audit\n"
+            "Node A1 and A2 verified.\n\n"
+            "## 1. Minimal Diff Review\n"
+            "Clean diff.\n\n"
+            "## 2. Living Architecture & Charter Audit\n"
+            "Epic documentation checked.\n\n"
+            "## 3. Positive Test Results\n"
+            "All positive tests pass.\n\n"
+            "## 4. Negative Discriminator Verification\n"
+            "Direct moves rejected.\n\n"
+            "## 5. Certification\n"
+            "Final Verdict: PASS\n"
+        )
+        ev_path = self.test_dir / "fuzzy_qa_evidence.md"
+        ev_path.write_text(fuzzy_evidence, encoding="utf-8")
+
+        # Set up a ticket in verify state to approve
+        created = kb.api_create("demo/feature/T099", "Fuzzy QA ticket", self.board)
+        ref = created["ref"]
+        plan = (
+            "- [ ] A1 [START] [lane:A] Step 1\n"
+            "- [ ] A2 [lane:A] [after:A1] [ACCEPTANCE:MANDATORY] Final step\n"
+        )
+        kb.api_ticket_edit(
+            ref,
+            board=self.board,
+            outcome="Fuzzy QA outcome.",
+            scope="- src/demo.py",
+            plan=plan,
+            prove="```bash\npytest\n```",
+        )
+        kb.api_move(ref, "in-progress", "Starting", self.board, agent_id="agent-qa")
+        kb.api_checkpoint(ref, checked_nodes=["A1", "A2"], node_proofs={"A1": "done A1", "A2": "done A2"}, files=["src/demo.py"], board=self.board)
+        kb.api_move(ref, "verify", "Ready for QA", self.board)
+        qa = kb.api_qa_start(ref, self.board)
+        app = kb.api_qa_approve(ref, qa["qa_nonce"], str(ev_path), "Fuzzy QA passed", self.board)
+        self.assertEqual(app["to"], "done")
+
 
 if __name__ == "__main__":
     unittest.main()
