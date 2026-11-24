@@ -42,6 +42,7 @@ CORE_FILES = [
     "resources/board.html",
     "tests/test_kanban.py",
     "tests/test_qa_lock.py",
+    "tests/test_qa_e2e_isolation.py",
 ]
 
 def collect_all_files():
