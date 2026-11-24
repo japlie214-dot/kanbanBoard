@@ -603,6 +603,43 @@ class TestKanbanCore(unittest.TestCase):
             server.server_close()
             t.join(timeout=2)
 
+    def test_centralized_board_root_resolution(self):
+        """Verify board_root resolution strictly centralizes and never creates board/ in random repos."""
+        # 1. KANBAN_BOARD_ROOT env override
+        custom_board = self.test_dir / "custom_board"
+        custom_board.mkdir()
+        try:
+            os.environ["KANBAN_BOARD_ROOT"] = str(custom_board)
+            self.assertEqual(kb.board_root(), custom_board.resolve())
+        finally:
+            del os.environ["KANBAN_BOARD_ROOT"]
+
+        # 2. KANBAN_WORKSPACE_ROOT override
+        self.assertEqual(kb.board_root(), self.board.resolve())
+
+        # 3. Simulate random git repository without env vars
+        old_ws = os.environ.pop("KANBAN_WORKSPACE_ROOT", None)
+        try:
+            random_repo = self.test_dir / "random_app"
+            random_repo.mkdir()
+            (random_repo / ".git").mkdir()
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(str(random_repo))
+                resolved = kb.board_root()
+                # Must NOT resolve to random_app / board
+                self.assertNotEqual(resolved, random_repo / "board")
+                self.assertFalse((random_repo / "board").exists())
+                # Must resolve to central board (C:/Projects/kanbanBoard/board or ~/.kanban/board)
+                expected_primary = Path("C:/Projects/kanbanBoard/board").resolve()
+                expected_fallback = (Path.home() / ".kanban" / "board").resolve()
+                self.assertIn(resolved, [expected_primary, expected_fallback])
+            finally:
+                os.chdir(orig_cwd)
+        finally:
+            if old_ws:
+                os.environ["KANBAN_WORKSPACE_ROOT"] = old_ws
+
 
 if __name__ == "__main__":
     unittest.main()

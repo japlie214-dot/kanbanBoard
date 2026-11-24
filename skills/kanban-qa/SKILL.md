@@ -7,6 +7,10 @@ description: High-rigor 4-tier Process + Result QA protocol: DAG Checkpoint Proc
 
 The `kb-qa` protocol acts as an independent gatekeeper between `verify` and `done`. Primary implementers MUST NOT self-approve tickets.
 
+## Strict Independence Contract
+- **No Self-Approval**: The agent that authored the code MUST NOT self-sign `kanban_qa(action="approve")` in the same conversation turn. Doing so invalidates QA rigor through author confirmation bias.
+- **Subagent Invocation**: When a ticket reaches `verify`, the implementing agent MUST spawn an independent subagent via `invoke_subagent(TypeName="self", Role="Kanban QA Auditor", Model="inherit"|"pro", ...)` to conduct the audit with clean context.
+
 ## How the Main Agent Launches `kb-qa`
 
 When a ticket is in `verify`, the main agent invokes `kb-qa` using `invoke_subagent`:
@@ -15,14 +19,15 @@ When a ticket is in `verify`, the main agent invokes `kb-qa` using `invoke_subag
 invoke_subagent(
     TypeName="self",
     Role="Kanban QA Auditor",
+    Model="inherit",
     Prompt="""You are the independent kb-qa auditor for ticket <ref>.
 Follow the 4-Tier Process + Result QA protocol strictly:
 1. Initialize session: call kanban_qa(action="start", ref="<ref>") to retrieve spec, DAG, Execution Log, and secret qa_nonce.
 2. Execute 4-Tier Audit:
    - Tier 0 (Process & Checkpoint Audit): Verify ALL checkpoints from [START] to ALL mandatory [ACCEPTANCE:MANDATORY] nodes are checked AND actually executed with real proof in ## Execution Log (no rubber-stamping, valid if/else decisions, chronological order).
    - Tier 1 (The Tree): Ponytail minimal diff inspection.
-   - Tier 2 (The Surrounding Forest): Ecosystem blast-radius & living documentation audit (callers, call-sites, test suite, epic.md/ADRs).
-   - Tier 3: Two-pass Horse vs. Zebra discriminator testing.
+   - Tier 2 (The Surrounding Forest): Ecosystem blast-radius & living documentation audit (callers, call-sites, test suite, epic.md/ADRs). Check for REGRESSIONS in previously working functionality!
+   - Tier 3: Two-pass Horse vs. Zebra discriminator testing (both positive proofs and refusal of invalid inputs).
 3. Write substantive evidence report to evidence/<project>/<epic>/<tid>-qa.md.
 4. If PASS: call kanban_qa(action="approve", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="...").
 5. If FAIL: call kanban_qa(action="reject", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="<failure reason>")."""
@@ -47,7 +52,11 @@ Follow the 4-Tier Process + Result QA protocol strictly:
 - **Minimal Diff**: Reject sprawling changes when localized edits suffice.
 - **Residue Check**: Zero debug logs, temporary mocks, commented-out dead code.
 
-### Tier 2: The Surrounding Forest (Ecosystem Blast-Radius & Living Architecture)
+### Tier 2: The Surrounding Forest (Ecosystem Blast-Radius & Anti-Regression Verification)
+> *"Did the new change break any existing contract, component, or user-facing capability?"*
+- **Active Regression Hunt**: Verify that existing UI interactions, keyboard shortcuts, or components were NOT replaced, disabled, or broken (e.g. if styling was updated, can sections still fold/unfold? Can cards still be clicked? Did existing endpoints stop working?).
+- **Documentation Enforcement**: Reject if public interfaces, schemas, or CLI commands were altered without updating `epic.md` or adding supplementary docs (`kanban_doc`).
+- **Test Suite Integrity**: Run full test suite, ensuring existing tests still pass without regressions.
 > *"When you cut down a tree, you don't just check the tree. You check the surrounding too whether it falls into something or not."*
 - **Callers & Call-Sites**: Audit every caller of modified functions. Did any changed signature or return type cause silent failures?
 - **Broader Test Suite**: Do not just run the ticket's isolated unit test! Run the project's broader test suite to verify adjacent features did not break.

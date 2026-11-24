@@ -81,12 +81,14 @@ def is_plugin_internal_path(path: Path) -> bool:
 
 
 def board_root() -> Path:
-    """Resolve the canonical board directory with clean precedence:
+    """Resolve the canonical centralized board directory:
     1. Explicit environment variable: KANBAN_BOARD_ROOT
-    2. Explicit workspace env var: KANBAN_WORKSPACE_ROOT / 'board'
-    3. Active project workspace: If current working directory or any parent has a 'board/' directory
-    4. Active git repository: If current working directory or any parent has a '.git' directory
-    5. Universal user data directory: ~/.kanban/board (works on every machine, standalone plugin, zero clone required)
+    2. Explicit test/workspace override: KANBAN_WORKSPACE_ROOT / 'board'
+    3. Primary centralized repository board: C:/Projects/kanbanBoard/board (if it exists)
+    4. Universal central user board: ~/.kanban/board (Path.home() / '.kanban' / 'board')
+
+    NOTE: Random project repositories (e.g. C:/Projects/<app>) MUST NEVER have
+    a local board/ directory auto-created. All projects are strictly managed centrally.
     """
     env_board = os.environ.get("KANBAN_BOARD_ROOT")
     if env_board:
@@ -96,20 +98,12 @@ def board_root() -> Path:
     if env_ws:
         return Path(env_ws).resolve() / BOARD_DIR
 
-    cwd = Path.cwd()
-    # 3. Check for existing project board/ directory (excluding plugin caches)
-    for p in [cwd] + list(cwd.parents):
-        b = p / BOARD_DIR
-        if b.is_dir() and not is_plugin_internal_path(p):
-            return b
+    # Canonical centralized repository board (primary workstation)
+    primary_repo_board = Path("C:/Projects/kanbanBoard/board")
+    if primary_repo_board.is_dir():
+        return primary_repo_board.resolve()
 
-    # 4. Check for active git repository root
-    for p in [cwd] + list(cwd.parents):
-        if (p / ".git").is_dir() and not is_plugin_internal_path(p):
-            return p / BOARD_DIR
-
-    # 5. Universal user data directory: ~/.kanban/board
-    # Completely independent of any repository clone; works for standalone .plugin installs.
+    # Universal user-level centralized board
     user_board = Path.home() / ".kanban" / BOARD_DIR
     try:
         user_board.mkdir(parents=True, exist_ok=True)
@@ -119,20 +113,16 @@ def board_root() -> Path:
 
 
 def workspace_root() -> Path:
+    """Resolve the active application workspace directory (for git status checks)."""
     env_ws = os.environ.get("KANBAN_WORKSPACE_ROOT")
     if env_ws:
         return Path(env_ws).resolve()
 
-    b_root = board_root()
-    # If board_root is inside user home ~/.kanban/board, workspace root is cwd if cwd has git, else ~/.kanban
-    if b_root == Path.home() / ".kanban" / BOARD_DIR:
-        cwd = Path.cwd()
-        for p in [cwd] + list(cwd.parents):
-            if (p / ".git").is_dir() and not is_plugin_internal_path(p):
-                return p
-        return b_root.parent
-
-    return b_root.parent if b_root.name == BOARD_DIR else b_root
+    cwd = Path.cwd()
+    for p in [cwd] + list(cwd.parents):
+        if (p / ".git").is_dir() and not is_plugin_internal_path(p):
+            return p
+    return cwd
 
 
 @contextlib.contextmanager

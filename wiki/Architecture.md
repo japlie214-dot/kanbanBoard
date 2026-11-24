@@ -86,20 +86,19 @@ $$\text{ref} = \langle\text{project}\rangle / \langle\text{epic}\rangle / \langl
 Ticket IDs are zero-padded alphanumeric strings prefixed with `T` (e.g., `T001`, `T002`, `T100`).
 
 ### 2.2 Board Root Directory Resolution Protocol
-KanbanBoard supports both project-local execution and standalone multi-client `.plugin` execution without requiring a cloned repository:
+KanbanBoard operates on a **strictly centralized multi-project architecture**. Application repositories (e.g. `C:\Projects\etoroNightwatch`, `C:\Projects\coom`) must never contain local `board/` directories:
 
 ```
-1. Explicit Override:      KANBAN_BOARD_ROOT environment variable (if set)
-2. Workspace Override:     KANBAN_WORKSPACE_ROOT / "board" (if set)
-3. Project-Local Board:    Current working directory (or any parent) contains "board/"
-4. Project Git Repository: Current working directory (or any parent) contains ".git/"
-5. Standalone Plugin Data: ~/.kanban/board (Path.home() / ".kanban" / "board")
+1. Explicit Override:          KANBAN_BOARD_ROOT environment variable (if set)
+2. Test / Workspace Override:  KANBAN_WORKSPACE_ROOT / "board" (if set)
+3. Primary Workstation Board:  C:/Projects/kanbanBoard/board (if directory exists)
+4. Universal Central Board:    ~/.kanban/board (Path.home() / ".kanban" / "board")
 ```
 
-When a user installs the standalone `.plugin` archive without cloning the project source code, MCP clients (Claude Desktop, Antigravity, Codex) and `viewer.py` resolve to `~/.kanban/board`. This guarantees:
-- **Zero Hardcoded Paths**: No dependency on any local folder structure or cloned repository.
-- **Cache Isolation Defense**: User tickets are stored in `~/.kanban/board`, preventing data loss when plugin packages are updated or reinstalled in Claude's internal RPM cache.
-- **Multi-Client Synchronization**: Claude Desktop, Antigravity, and `viewer.py` all access the identical unified board automatically.
+Under this protocol:
+- **Zero Repo Pollution**: Application repositories stay 100% clean. The engine never auto-sprouts a `board/` folder inside any project workspace.
+- **Universal Multi-Project Centralization**: All projects (`nightwatch`, `coom`, `deckanim`, `kanban-system`, `memberberries`, `snowball`) are colocated under the central board as `board/<project_slug>/`.
+- **Global Viewer Synchronization**: `viewer.py` monitors the centralized board directly, providing real-time visibility across all projects from one unified dashboard.
 
 ---
 

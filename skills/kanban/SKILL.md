@@ -23,6 +23,15 @@ This skill guides agents on interacting with the local file-backed Kanban board 
 
 ---
 
+## 0. The Centralized Board Architecture (NEVER Create Local `board/` in Repos)
+
+The Kanban board is **strictly centralized** across all workspaces (`C:\Projects\kanbanBoard\board` / `~/.kanban/board`).
+- **Zero Repo Pollution**: When working in any application repository (e.g. `C:\Projects\etoroNightwatch`, `C:\Projects\coom`, `C:\Projects\deckanim`), NEVER create, auto-sprout, or commit a `board/` directory inside that repository. The MCP tools automatically resolve to the centralized board directory.
+- **Always Pass `project="<slug>"`**: Every ticket belongs to a project slug in the central board (e.g. `kanban_ticket(project="nightwatch", epic="trunk", title="...")`). The central board routes it to `board/<slug>/<epic>/` automatically.
+- **Centralized Viewer**: The dashboard running at `http://127.0.0.1:7890` monitors the central board and displays all projects simultaneously.
+
+---
+
 ## 1. The Agile DAG Mindset (Branching vs. Waterfall Fragility)
 
 ### Why Linear Waterfall Plans Fail Autonomous Agents
