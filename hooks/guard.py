@@ -124,6 +124,14 @@ def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
         if reason:
             return False, f"BLOCKED: {reason}"
 
+    if tool_name == "call_mcp_tool":
+        mcp_tool = str(args.get("ToolName") or "")
+        if mcp_tool == "kanban_qa":
+            return False, (
+                "BLOCKED: Direct invocation of kanban_qa by the main agent is forbidden. "
+                "Only the independent kb-qa subagent may audit and approve tickets."
+            )
+
     return True, ""
 
 

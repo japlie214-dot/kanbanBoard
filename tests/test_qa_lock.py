@@ -121,6 +121,15 @@ class TestPreToolUseGuard(unittest.TestCase):
         })
         self.assertTrue(ok3)
 
+        ok4, reason = guard.evaluate_antigravity({
+            "toolCall": {
+                "name": "call_mcp_tool",
+                "args": {"ServerName": "kanban-board_kanban", "ToolName": "kanban_qa"},
+            }
+        })
+        self.assertFalse(ok4)
+        self.assertIn("Direct invocation of kanban_qa by the main agent is forbidden", reason)
+
     def test_cli_exit_codes(self):
         payload = json.dumps({"tool_name": "mcp__kanban__kanban_qa", "tool_input": {"action": "start"}})
         proc = subprocess.run(
