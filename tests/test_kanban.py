@@ -540,6 +540,12 @@ class TestKanbanCore(unittest.TestCase):
         self.assertIn("Kanban Board", html)
         self.assertIn("detail-drawer", html)
         self.assertIn("dag-viz-container", html)
+        # Test collapsible fold elements & expand/collapse controls
+        self.assertIn("fold(root,", html)
+        self.assertIn("details > summary", html)
+        self.assertIn("btn-expand-all", html)
+        self.assertIn("btn-collapse-all", html)
+        self.assertIn("kb.open.", html)
 
         # 3. Test board stamp hashing
         stamp = viewer.board_stamp(self.board)

@@ -25,3 +25,9 @@ The `ui` epic covers the browser-based visualization dashboard implemented in `v
    - **Tab 3 (Process Audit Stream)**: Chronological execution proof timeline displaying checkpoint timestamps, kind badges (`DONE`, `SKIP`), and recorded evidence snippets.
    - **Tab 4 (Touched Files & Attachments)**: Register of modified workspace files with quick-copy buttons and safe attachments register.
    - **Tab 5 (Living Architecture Reader)**: Slide-over markdown reader displaying project charter (`project.md`) and epic specification (`epic.md`) for instant context alignment.
+6. **Collapsible Project & Epic Fold Hierarchy**:
+   - Native `<details>` and `<summary>` components with chevron indicators (`▸` / `▾`) and hover accents.
+   - Individual open/close fold state persisted to `localStorage` under `kb.open.<key>`.
+   - Project-level status chip counts on lane headers for instant visibility even when collapsed.
+   - Inline docs accordion (`📖 docs`) rendering `project.md` and `epic.md` inline.
+   - Toolbar buttons (`▾ Expand All`, `▸ Collapse All`) and keyboard shortcut (`e`) for global toggling.

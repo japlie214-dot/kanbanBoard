@@ -101,3 +101,8 @@ The single-page HTML application (`resources/board.html`) features:
    - Checkbox to toggle hiding `done` tickets for focused work sessions.
 4. **Dark/Light Theme**:
    - High-contrast engineering UI matching modern IDE aesthetics, persisted in `localStorage`.
+5. **Collapsible Project & Epic Hierarchy**:
+   - Native `<details>` and `<summary>` components with animated disclosure indicators (`▸` / `▾`).
+   - Open/close fold states automatically persisted to `localStorage` under `kb.open.<key>`.
+   - Global `▾ Expand All` and `▸ Collapse All` toolbar controls, plus quick toggle keyboard shortcut (`e`).
+   - Project-level ticket status count badges on headers for instant status overview even when collapsed.

@@ -236,6 +236,14 @@ body.has-detail main {
   border-left: 4px solid var(--proj);
   overflow: hidden;
 }
+details > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
 .lane > .lane-head {
   display: flex;
   align-items: center;
@@ -245,6 +253,23 @@ body.has-detail main {
   background: color-mix(in srgb, var(--proj) 8%, var(--panel));
   cursor: pointer;
   user-select: none;
+}
+.lane:not([open]) > .lane-head {
+  border-bottom: none;
+}
+.lane > summary::before, .epic > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 14px;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+.lane[open] > summary::before, .epic[open] > summary::before {
+  content: "▾";
+}
+.lane > summary:hover, .epic > summary:hover {
+  filter: brightness(1.05);
 }
 .lane-name { font-size: 14px; font-weight: 750; color: var(--proj); }
 .lane-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
@@ -268,7 +293,58 @@ body.has-detail main {
   cursor: pointer;
   user-select: none;
 }
+.epic:not([open]) > .epic-head {
+  border-bottom: none;
+}
 .epic-name { font-size: 13px; font-weight: 700; color: var(--epic); }
+
+.docs {
+  margin: 6px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  padding: 4px 8px;
+  background: var(--panel-elevated);
+}
+.docs-toggle {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 0;
+}
+.docs-toggle::before {
+  content: "▸";
+  display: inline-block;
+  width: 12px;
+  color: var(--muted);
+}
+.docs[open] > .docs-toggle::before {
+  content: "▾";
+}
+.doc {
+  border-left: 2px solid var(--accent);
+  margin: 6px 0;
+  padding: 4px 10px;
+  background: var(--panel);
+  border-radius: 0 4px 4px 0;
+}
+.doc-name {
+  font-size: 11px;
+  color: var(--proj);
+  font-weight: 750;
+  margin-bottom: 4px;
+}
+.doc-body {
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, Consolas, monospace;
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--bg);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
 
 .counts { display: inline-flex; gap: 3px; }
 .count { font-size: 10px; font-weight: 750; padding: 0 5px; border-radius: 8px; color: #fff; background: var(--status-color); }
@@ -900,6 +976,8 @@ body.has-detail main {
     <label class="filter-input" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
       <input type="checkbox" id="f-hidedone"> Hide Done
     </label>
+    <button class="filter-input" id="btn-expand-all" type="button" title="Expand All Projects & Epics (e)">▾ Expand All</button>
+    <button class="filter-input" id="btn-collapse-all" type="button" title="Collapse All Projects & Epics">▸ Collapse All</button>
     <span id="f-count" style="font-size:11px;color:var(--muted);margin-left:auto;">—</span>
   </div>
 </header>
@@ -1077,8 +1155,53 @@ setInterval(() => {
 }, 1000);
 
 /* ==========================================================================
-   Render Board Columns & Cards
+   Fold, Storage & Render Board Columns & Cards
    ========================================================================== */
+function store(key, val) {
+  try {
+    if (val === undefined) return localStorage.getItem(key);
+    localStorage.setItem(key, val);
+  } catch(e) {
+    return null;
+  }
+}
+
+function fold(parent, key, cls, defaultOpen = true) {
+  const node = add(parent, "details", cls);
+  node.dataset.key = key;
+  const saved = store("kb.open." + key);
+  node.open = saved === null ? defaultOpen : saved === "1";
+  node.addEventListener("toggle", () => {
+    store("kb.open." + key, node.open ? "1" : "0");
+  });
+  return node;
+}
+
+function renderStatusCounts(parent, tickets) {
+  const countsBox = add(parent, "span", "counts");
+  for (const st of statuses) {
+    const c = (tickets || []).filter(t => t.status === st).length;
+    if (c > 0) {
+      const chip = add(countsBox, "span", "count", c);
+      chip.dataset.status = st;
+      chip.title = `${st}: ${c}`;
+    }
+  }
+}
+
+function docs(parent, key, list) {
+  const valid = (list || []).filter(d => d && (d.markdown || d.body || d.name));
+  if (!valid.length) return;
+  const box = fold(parent, key + ".docs", "docs", false);
+  add(box, "summary", "docs-toggle", "📖 docs (" + valid.length + "): " + valid.map(d => d.name || d.slug || "doc").join(", "));
+  for (const doc of valid) {
+    const section = add(box, "section", "doc");
+    add(section, "div", "doc-name", doc.name || doc.slug);
+    const bodyText = (doc.markdown || doc.body || "").replace(/^---[\s\S]*?\n---\r?\n/, "").trim();
+    add(section, "pre", "doc-body", bodyText || "(empty)");
+  }
+}
+
 function render(data) {
   if (!data) return;
   currentBoardData = data;
@@ -1117,30 +1240,26 @@ function render(data) {
 
   let visibleCount = 0;
   for (const proj of board.projects) {
-    const lane = add(root, "div", "lane");
-    const head = add(lane, "div", "lane-head");
+    const lane = fold(root, "p." + proj.slug, "lane", true);
+    const head = add(lane, "summary", "lane-head");
     add(head, "span", "lane-name", proj.name || proj.slug);
     if (proj.summary) add(head, "span", "lane-summary", proj.summary);
+    renderStatusCounts(head, proj.tickets || []);
     add(head, "span", "lane-meta", proj.state || "active");
+    docs(lane, "p." + proj.slug, [{ name: "project.md", markdown: proj.body }, ...(proj.docs || [])]);
 
     for (const epic of proj.epics || []) {
       const epicTickets = (proj.tickets || []).filter(t => t.epic === epic.slug);
       const filtered = epicTickets.filter(t => matchesFilter(t, proj.slug, epic.slug, f));
       visibleCount += filtered.length;
 
-      const eBox = add(lane, "div", "epic");
-      const eHead = add(eBox, "div", "epic-head");
+      const eBox = fold(lane, "e." + proj.slug + "." + epic.slug, "epic", true);
+      const eHead = add(eBox, "summary", "epic-head");
       add(eHead, "span", "epic-name", epic.name || epic.slug);
       if (epic.summary) add(eHead, "span", "lane-summary", epic.summary);
-      
-      const countsBox = add(eHead, "span", "counts");
-      for (const st of statuses) {
-        const c = epicTickets.filter(t => t.status === st).length;
-        if (c > 0) {
-          const chip = add(countsBox, "span", "count", c);
-          chip.dataset.status = st;
-        }
-      }
+      renderStatusCounts(eHead, epicTickets);
+      add(eHead, "span", "lane-meta", epic.state || "active");
+      docs(eBox, "e." + proj.slug + "." + epic.slug, [{ name: "epic.md", markdown: epic.body }, ...(epic.docs || [])]);
 
       const colWrap = add(eBox, "div", "columns");
       for (const st of statuses) {
@@ -1654,7 +1773,19 @@ window.addEventListener("keydown", e => {
   if (e.key === "t" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     toggleTheme();
   }
+  if (e.key === "e" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    const anyClosed = Array.from(document.querySelectorAll("details.lane, details.epic")).some(d => !d.open);
+    toggleAllDetails(anyClosed);
+  }
 });
+
+function toggleAllDetails(open) {
+  for (const node of document.querySelectorAll("details.lane, details.epic")) {
+    node.open = open;
+    const key = node.dataset.key;
+    if (key) store("kb.open." + key, open ? "1" : "0");
+  }
+}
 
 function toggleTheme() {
   const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -1667,6 +1798,8 @@ if (savedTheme) document.documentElement.dataset.theme = savedTheme;
 
 $("btn-theme").onclick = toggleTheme;
 $("btn-refresh").onclick = refresh;
+$("btn-expand-all").onclick = () => toggleAllDetails(true);
+$("btn-collapse-all").onclick = () => toggleAllDetails(false);
 
 /* ==========================================================================
    Live SSE Transport & Refresh
