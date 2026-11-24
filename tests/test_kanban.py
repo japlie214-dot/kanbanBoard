@@ -14,6 +14,8 @@ ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(ROOT))
 import kb
 import mcp_server
+import viewer
+import urllib.request
 
 
 class TestKanbanCore(unittest.TestCase):
@@ -517,6 +519,83 @@ class TestKanbanCore(unittest.TestCase):
         qa = kb.api_qa_start(ref, self.board)
         app = kb.api_qa_approve(ref, qa["qa_nonce"], str(ev_path), "Fuzzy QA passed", self.board)
         self.assertEqual(app["to"], "done")
+
+    def test_viewer_server_and_ui_payload_masterclass(self):
+        """Test the viewer HTTP server, SSE events, payload enrichment, and security invariants."""
+        # 1. Test payload enrichment
+        payload = kb.api_board_payload(self.board)
+        self.assertIn("board", payload)
+        self.assertIn("board_dir", payload["board"])
+        self.assertEqual(payload["board"]["board_dir"], str(self.board))
+        self.assertIn("projects", payload["board"])
+        for p in payload["board"]["projects"]:
+            for t in p.get("tickets", []):
+                self.assertIn("dag_nodes", t)
+                self.assertIn("ready_nodes", t)
+                self.assertIn("execution_log", t)
+
+        # 2. Test HTML hydration
+        html = viewer.get_html_page(self.board)
+        self.assertIn("window.__INITIAL_DATA__ =", html)
+        self.assertIn("Kanban Board", html)
+        self.assertIn("detail-drawer", html)
+        self.assertIn("dag-viz-container", html)
+
+        # 3. Test board stamp hashing
+        stamp = viewer.board_stamp(self.board)
+        self.assertEqual(len(stamp), 64)
+
+        # 4. Start ephemeral viewer server
+        server, port = viewer.find_available_server(self.board, preferred_port=8910)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+
+        base_url = f"http://127.0.0.1:{port}"
+        try:
+            # Positive Test: GET /
+            with urllib.request.urlopen(f"{base_url}/") as res:
+                self.assertEqual(res.status, 200)
+                body = res.read().decode("utf-8")
+                self.assertIn("window.__INITIAL_DATA__", body)
+
+            # Positive Test: GET /api/board
+            with urllib.request.urlopen(f"{base_url}/api/board") as res:
+                self.assertEqual(res.status, 200)
+                data = json.loads(res.read().decode("utf-8"))
+                self.assertIn("board", data)
+                self.assertIn("statuses", data)
+
+            # Positive Test: GET /health
+            with urllib.request.urlopen(f"{base_url}/health") as res:
+                self.assertEqual(res.status, 200)
+                h = json.loads(res.read().decode("utf-8"))
+                self.assertTrue(h["ok"])
+                self.assertTrue(h["readonly"])
+
+            # Positive Test: HEAD /events
+            req = urllib.request.Request(f"{base_url}/events", method="HEAD")
+            with urllib.request.urlopen(req) as res:
+                self.assertEqual(res.status, 200)
+                self.assertIn("text/event-stream", res.headers.get("Content-Type", ""))
+
+            # Negative Test: Unknown route -> 404
+            try:
+                urllib.request.urlopen(f"{base_url}/invalid-endpoint")
+                self.fail("Expected 404")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 404)
+
+            # Negative Test: POST to read-only server -> 405
+            try:
+                post_req = urllib.request.Request(f"{base_url}/api/board", data=b"{}", method="POST")
+                urllib.request.urlopen(post_req)
+                self.fail("Expected 405")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 405)
+
+        finally:
+            server.server_close()
+            t.join(timeout=2)
 
 
 if __name__ == "__main__":

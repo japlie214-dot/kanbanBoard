@@ -1967,6 +1967,10 @@ def api_board_payload(board: Path) -> dict:
                     meta, body = parse_frontmatter(f.read_text(encoding="utf-8"))
                     ref = full_ref(f, board)
                     is_active, lease_str = inspect_ticket_lease(meta.get("owner"))
+                    nodes, _ = parse_todo_tree(body)
+                    ready = compute_ready_nodes(nodes) if nodes else []
+                    exec_log = parse_execution_log(body)
+                    done_count = len([n for n in nodes if n["status"] == "done"]) if nodes else 0
                     proj_tickets.append({
                         "reference": ref,
                         "id": f.stem,
@@ -1981,6 +1985,10 @@ def api_board_payload(board: Path) -> dict:
                         "files": meta.get("files") or [],
                         "attachments": meta.get("attachments") or [],
                         "body": body,
+                        "dag_nodes": nodes or [],
+                        "ready_nodes": ready,
+                        "execution_log": exec_log,
+                        "progress": f"{done_count}/{len(nodes)} nodes checked" if nodes else None,
                         "path": str(f)
                     })
 
@@ -1998,7 +2006,8 @@ def api_board_payload(board: Path) -> dict:
 
     return {
         "board": {
-            "projects": projects
+            "projects": projects,
+            "board_dir": str(board)
         },
         "statuses": list(VALID_STATUSES)
     }

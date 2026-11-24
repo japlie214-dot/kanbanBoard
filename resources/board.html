@@ -3,127 +3,1006 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kanban Board</title>
+<title>Kanban Board — Multi-Agent Observability</title>
 <style>
-:root{color-scheme:light dark;--bg:#f4f6f8;--panel:#fff;--text:#18212b;--muted:#657386;--line:#d8dee7;--accent:#3567a8;--bad:#c83232;--warn:#a66a00;--shadow:0 1px 3px #15202b16;--proj:#0b7285;--epic:#9c36b5;--s-backlog:#656d76;--s-in-progress:#7e4ade;--s-verify:#8f6500;--s-done:#197b35;--s-blocked:#cf222e}
-@media(prefers-color-scheme:dark){:root{--bg:#11171d;--panel:#1a232c;--text:#e5edf5;--muted:#a0afbd;--line:#33414e;--accent:#87b9ff;--bad:#ff7272;--warn:#f4bf53;--shadow:0 1px 3px #0006;--proj:#3bc9db;--epic:#da77f2;--s-backlog:#8b949e;--s-in-progress:#bc8cff;--s-verify:#e3b341;--s-done:#3fb950;--s-blocked:#ff7b72}}
-:root[data-theme=light]{color-scheme:light;--bg:#f4f6f8;--panel:#fff;--text:#18212b;--muted:#657386;--line:#d8dee7;--accent:#3567a8;--bad:#c83232;--warn:#a66a00;--shadow:0 1px 3px #15202b16;--proj:#0b7285;--epic:#9c36b5;--s-backlog:#656d76;--s-in-progress:#7e4ade;--s-verify:#8f6500;--s-done:#197b35;--s-blocked:#cf222e}
-:root[data-theme=dark]{color-scheme:dark;--bg:#11171d;--panel:#1a232c;--text:#e5edf5;--muted:#a0afbd;--line:#33414e;--accent:#87b9ff;--bad:#ff7272;--warn:#f4bf53;--shadow:0 1px 3px #0006;--proj:#3bc9db;--epic:#da77f2;--s-backlog:#8b949e;--s-in-progress:#bc8cff;--s-verify:#e3b341;--s-done:#3fb950;--s-blocked:#ff7b72}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;box-shadow:var(--shadow)}
-.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.brand{font-size:17px;font-weight:750;margin-right:auto;letter-spacing:-.01em}.totals{display:flex;gap:6px;flex-wrap:wrap}.total{border:1px solid var(--line);border-radius:5px;padding:3px 7px;color:var(--muted);font-size:11px;display:inline-flex;align-items:center}.total b{color:var(--text);margin-left:3px}.meta{color:var(--muted);font-size:11px}.connection{display:inline-flex;align-items:center;gap:5px}.dot{width:8px;height:8px;border-radius:50%;background:#b23a3a}.live .dot{background:#2eaa68;box-shadow:0 0 0 2px #2eaa6833}
-main{padding:10px 14px 24px}.lane{background:var(--panel);border:1px solid var(--line);border-radius:7px;margin:0 0 10px;overflow:hidden;box-shadow:var(--shadow);border-left:4px solid var(--proj)}.lane>.lane-head{display:flex;align-items:baseline;gap:9px;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;background:color-mix(in srgb,var(--proj) 10%,var(--panel))}.lane-name{font-size:14px;font-weight:700;color:var(--proj)}.lane-summary{color:var(--muted);overflow:hidden;text-overflow:ellipsis}.lane-meta{margin-left:auto;color:var(--muted);font-size:11px}.columns{display:flex;gap:6px;padding:7px;overflow-x:auto;align-items:stretch}.column{flex:1 1 0;min-width:140px;border-radius:5px;background:color-mix(in srgb,var(--bg) 75%,var(--panel));padding:5px}.column.empty{flex:0 0 90px;min-width:90px}.column-title{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.045em;padding:1px 2px 5px}.column-title b{font-weight:600}.cards{display:grid;gap:5px;align-content:start;max-height:70vh;overflow-y:auto}.card{border:1px solid var(--line);border-radius:5px;padding:6px 7px;background:var(--panel);min-width:0;cursor:pointer}.card.error{border:1px solid var(--bad);box-shadow:inset 3px 0 var(--bad)}.card.warning{border-color:var(--warn)}.card-top{display:flex;align-items:flex-start;gap:5px}.id{font-size:10px;color:var(--muted);font-weight:700;white-space:nowrap}.title{font-weight:650;overflow-wrap:anywhere}.priority{margin-left:auto;border-radius:3px;padding:0 4px;background:var(--bg);color:var(--muted);font-size:9px;white-space:nowrap}.p0,.p1{color:var(--bad);font-weight:800}.details{display:flex;flex-wrap:wrap;gap:2px 8px;color:var(--muted);font-size:10px;margin-top:3px}.reason{color:var(--bad);margin-top:3px;overflow-wrap:anywhere}.ticket-note{color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.deps{overflow-wrap:anywhere;color:var(--accent)}.issue-list{margin:4px 0 0;padding-left:14px;color:var(--bad);font-size:10px}.empty-note{color:var(--muted);font-size:10px;padding:3px 2px}
-[data-status="backlog"]{--status-color:var(--s-backlog)}[data-status="in-progress"]{--status-color:var(--s-in-progress)}[data-status="verify"]{--status-color:var(--s-verify)}[data-status="done"]{--status-color:var(--s-done)}[data-status="blocked"]{--status-color:var(--s-blocked)}
-.column[data-status]{border-top:3px solid var(--status-color);background:color-mix(in srgb,var(--status-color) 6%,color-mix(in srgb,var(--bg) 75%,var(--panel)))}.column[data-status]>.column-title{color:var(--status-color)}.card[data-status]{box-shadow:inset 3px 0 var(--status-color)}.card[data-status="done"]{opacity:.75}.card[data-status="done"]:hover{opacity:1}
-.total[data-status]::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--status-color);margin-right:5px}
-.age.stale{color:var(--warn)}.age.stale-critical{color:var(--bad);font-weight:700}
-.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px}.filter{font:inherit;font-size:11px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--text)}
-details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}.lane>summary::before,.epic>summary::before{content:"▸";color:var(--muted);margin-right:4px}.lane[open]>summary::before,.epic[open]>summary::before{content:"▾"}
-.epic{margin:6px 7px;border:1px solid var(--line);border-radius:6px;background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-left:4px solid var(--epic)}.epic>.epic-head{display:flex;align-items:baseline;gap:9px;padding:5px 8px;white-space:nowrap;overflow:hidden;background:color-mix(in srgb,var(--epic) 9%,transparent)}.epic-name{font-weight:700;color:var(--epic)}
-.counts{display:inline-flex;gap:3px}.count{font-size:10px;font-weight:700;padding:0 5px;border-radius:8px;color:#fff;background:var(--status-color)}
-.docs{margin:4px 8px}.docs-toggle{color:var(--accent);font-size:11px}.doc{border-left:2px solid var(--line);margin:4px 0;padding:2px 8px}.doc-name{font-size:10px;color:var(--muted);font-weight:700}.doc-body{white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;margin:2px 0;max-height:360px;overflow:auto}
-.more{font:inherit;font-size:11px;color:var(--accent);background:none;border:1px dashed var(--line);border-radius:4px;padding:3px;cursor:pointer;width:100%}.more:hover{border-color:var(--accent)}
-button{font:inherit;cursor:pointer}button:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#error{margin:8px 0 0;color:var(--bad)}#error:empty{display:none}
-body.has-detail main{padding-bottom:min(55vh, 550px)}
-.detail{position:fixed;inset:auto 0 0 0;width:100%;height:min(55vh, 550px);min-height:260px;max-height:88vh;z-index:100;display:flex;flex-direction:column;background:var(--panel);border-top:2px solid var(--line);box-shadow:0 -8px 30px #0008;resize:vertical}
-.detail[hidden]{display:none!important}
-.detail-bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;background:color-mix(in srgb,var(--panel) 96%,var(--bg));border-bottom:1px solid var(--line);padding:8px 18px;flex-shrink:0;gap:12px}
-.detail-title-group{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
-.detail-breadcrumb{font-size:11px;color:var(--muted);font-weight:600;display:inline-flex;align-items:center;gap:4px}
-.detail-ref{font:11px/1 ui-monospace,Consolas,monospace;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:3px 7px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
-.detail-ref:hover{background:color-mix(in srgb,var(--accent) 25%,transparent)}
-.detail-title{font-size:15px;font-weight:750;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.detail-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.detail-close{font:inherit;font-size:12px;font-weight:700;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:all .15s}
-.detail-close:hover{background:var(--bad);color:#fff;border-color:var(--bad)}
-.detail-content{flex:1;overflow-y:auto;padding:14px 18px 24px;display:grid;grid-template-columns:minmax(320px, 380px) 1fr;gap:18px}
-@media (max-width:900px){.detail-content{grid-template-columns:1fr}}
-.detail-sidebar{display:flex;flex-direction:column;gap:12px}
-.detail-card{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:10px 12px;box-shadow:var(--shadow)}
-.detail-card-head{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
-.status-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:800;color:#fff;background:var(--status-color);text-transform:uppercase}
-.owner-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px}
-.owner-full{grid-column:1 / -1}
-.owner-prop{display:flex;flex-direction:column;gap:2px}
-.owner-key{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
-.owner-val{font-size:12px;font-weight:600}
-.owner-val.agent-name{font-size:13px;color:var(--text);font-weight:750}
-.session-box{font:10px/1.3 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:3px 6px;display:flex;align-items:center;justify-content:space-between;gap:6px;overflow:hidden;text-overflow:ellipsis}
-.session-id-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.btn-copy-mini{font:inherit;font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--line);border-radius:3px;cursor:pointer;color:var(--muted)}
-.btn-copy-mini:hover{color:var(--text);border-color:var(--accent)}
-.lease-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:750}
-.lease-active{background:color-mix(in srgb,var(--s-done) 18%,transparent);color:var(--s-done);border:1px solid var(--s-done)}
-.lease-expired{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad);border:1px solid var(--bad)}
-.lease-unclaimed{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted);border:1px solid var(--line)}
-.files-scroll{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;margin-top:4px}
-.file-entry{font:11px/1.3 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:3px 7px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-.file-entry:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--panel))}
-.file-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.att-entry{font-size:11px;padding:4px 0;border-bottom:1px dashed var(--line)}
-.att-entry:last-child{border-bottom:none}
-.att-title{font-weight:650;color:var(--accent)}
-.att-desc{color:var(--muted);font-size:10px;margin-top:2px}
-.note-quote{font-size:12px;font-style:italic;color:var(--text);border-left:3px solid var(--accent);padding:4px 8px;background:color-mix(in srgb,var(--accent) 5%,var(--panel));border-radius:0 4px 4px 0}
-.detail-main{display:flex;flex-direction:column;min-width:0;height:100%}
-.spec-box{border:1px solid var(--line);border-radius:6px;background:var(--bg);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:var(--shadow)}
-.spec-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:color-mix(in srgb,var(--panel) 80%,var(--bg));border-bottom:1px solid var(--line)}
-.spec-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-.btn-toggle-raw{font:inherit;font-size:10px;padding:2px 7px;background:var(--bg);border:1px solid var(--line);border-radius:4px;cursor:pointer;color:var(--muted)}
-.btn-toggle-raw:hover{color:var(--text)}
-.spec-render{padding:14px 18px;overflow-y:auto;flex:1;font-size:12px;line-height:1.5}
-.spec-header{font-size:13px;font-weight:750;color:var(--accent);margin:14px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line)}
-.spec-header:first-child{margin-top:0}
-.spec-sub{font-size:12px;font-weight:700;color:var(--text);margin:10px 0 4px}
-.spec-p{margin:4px 0 8px;color:var(--text)}
-.bullet-item{margin:2px 0 2px 12px;color:var(--text)}
-.bullet-item.indent-1{margin-left:24px}
-.bullet-item.indent-2{margin-left:36px}
-.todo-item{display:flex;align-items:baseline;gap:6px;margin:3px 0 3px 6px;padding:2px 4px;border-radius:4px}
-.todo-item.indent-1{margin-left:18px}
-.todo-item.indent-2{margin-left:32px}
-.todo-item.indent-3{margin-left:46px}
-.todo-done{color:var(--muted);text-decoration:line-through}
-.todo-done .badge-acc,.todo-done .badge-chosen,.todo-done .badge-start,.todo-done .badge-acc-mandatory,.todo-done .badge-acc-optional{text-decoration:none}
-.todo-skipped{color:var(--muted);text-decoration:line-through;opacity:.7}
-.todo-skipped .todo-check{color:var(--muted);font-weight:normal}
-.todo-check{font-weight:bold;font-size:12px;color:var(--s-done)}
-.todo-open .todo-check{color:var(--muted)}
-.badge-acc{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn);border:1px solid var(--warn);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
-.badge-acc-mandatory{background:color-mix(in srgb,var(--warn) 25%,transparent);color:var(--warn);border:1px solid var(--warn);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
-.badge-acc-optional{background:color-mix(in srgb,var(--s-done) 20%,transparent);color:var(--s-done);border:1px solid var(--s-done);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
-.badge-start{background:color-mix(in srgb,var(--proj) 25%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
-.badge-lane{background:color-mix(in srgb,var(--epic) 20%,transparent);color:var(--epic);border:1px solid var(--epic);padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700}
-.badge-after{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--text);border:1px solid var(--line);padding:1px 4px;border-radius:3px;font-size:9px;font-family:ui-monospace,monospace}
-.badge-when{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);border:1px solid var(--accent);padding:1px 4px;border-radius:3px;font-size:9px}
-.badge-parallel{background:color-mix(in srgb,var(--proj) 15%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 4px;border-radius:3px;font-size:9px}
-.badge-optional{background:color-mix(in srgb,var(--s-done) 15%,transparent);color:var(--s-done);border:1px solid var(--s-done);padding:1px 4px;border-radius:3px;font-size:9px}
-.badge-chosen{background:color-mix(in srgb,var(--proj) 20%,transparent);color:var(--proj);border:1px solid var(--proj);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800}
-.code-block{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:8px 12px;margin:6px 0;font:11px/1.4 ui-monospace,Consolas,monospace;overflow-x:auto}
-.ticket-body-raw{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 16px;border:none;background:transparent;font:12px/1.45 ui-monospace,Consolas,monospace;margin:0;flex:1;overflow:auto}
-.detail .dep{margin:3px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px}
-.detail .dep:hover{border-color:var(--accent)}
-.empty-state{padding:24px;border:1px solid var(--line);border-radius:7px;background:var(--panel);text-align:center}
+:root {
+  color-scheme: light dark;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-elevated: #f8fafc;
+  --text: #18212b;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --bad: #dc2626;
+  --bad-soft: #fef2f2;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --good: #16a34a;
+  --good-soft: #f0fdf4;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.05);
+  --proj: #0891b2;
+  --epic: #9333ea;
+  --s-backlog: #64748b;
+  --s-in-progress: #8b5cf6;
+  --s-verify: #d97706;
+  --s-done: #16a34a;
+  --s-blocked: #dc2626;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-elevated: #243247;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --line: #334155;
+    --accent: #3b82f6;
+    --accent-soft: #1e3a8a33;
+    --bad: #ef4444;
+    --bad-soft: #450a0a44;
+    --warn: #f59e0b;
+    --warn-soft: #451a0344;
+    --good: #22c55e;
+    --good-soft: #052e1644;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow: 0 4px 6px -1px rgba(0,0,0,0.4);
+    --shadow-lg: 0 12px 24px -4px rgba(0,0,0,0.5);
+    --proj: #06b6d4;
+    --epic: #c084fc;
+    --s-backlog: #94a3b8;
+    --s-in-progress: #a78bfa;
+    --s-verify: #fbbf24;
+    --s-done: #4ade80;
+    --s-blocked: #f87171;
+  }
+}
+:root[data-theme=light] {
+  color-scheme: light;
+  --bg: #f4f6f8; --panel: #ffffff; --panel-elevated: #f8fafc; --text: #18212b;
+  --muted: #64748b; --line: #e2e8f0; --accent: #2563eb; --accent-soft: #eff6ff;
+  --bad: #dc2626; --warn: #d97706; --good: #16a34a;
+}
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --bg: #0f172a; --panel: #1e293b; --panel-elevated: #243247; --text: #f1f5f9;
+  --muted: #94a3b8; --line: #334155; --accent: #3b82f6; --accent-soft: #1e3a8a33;
+  --bad: #ef4444; --warn: #f59e0b; --good: #22c55e;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Header & HUD */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
+.brand-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.board-dir-badge {
+  font: 10px/1 ui-monospace, monospace;
+  background: var(--panel-elevated);
+  border: 1px solid var(--line);
+  padding: 3px 7px;
+  border-radius: 4px;
+  color: var(--muted);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-dir-badge:hover { color: var(--text); border-color: var(--accent); }
+.hud-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.active-leases-hud {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.lease-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lease-pill.expired {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  animation: pulse-danger 2s infinite;
+}
+.totals {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.total {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+}
+.total b { color: var(--text); margin-left: 4px; font-weight: 700; }
+.total[data-status]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-color);
+  margin-right: 5px;
+}
+.conn-pill {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.live .conn-dot {
+  background: var(--good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 25%, transparent);
+}
+
+.filters-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 6px;
+}
+.filter-input {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.filter-input:focus { border-color: var(--accent); }
+#f-q { width: 190px; }
+
+/* Board Canvas */
+main {
+  padding: 10px 14px 24px;
+  transition: padding-bottom 0.2s ease;
+}
+body.has-detail main {
+  padding-bottom: var(--drawer-height, 400px);
+}
+
+/* Swimlanes & Epics */
+.lane {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin: 0 0 10px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--proj);
+  overflow: hidden;
+}
+.lane > .lane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--proj) 8%, var(--panel));
+  cursor: pointer;
+  user-select: none;
+}
+.lane-name { font-size: 14px; font-weight: 750; color: var(--proj); }
+.lane-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+.lane-summary { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
+
+.epic {
+  margin: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  border-left: 4px solid var(--epic);
+  overflow: hidden;
+}
+.epic > .epic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--epic) 8%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+.epic-name { font-size: 13px; font-weight: 700; color: var(--epic); }
+
+.counts { display: inline-flex; gap: 3px; }
+.count { font-size: 10px; font-weight: 750; padding: 0 5px; border-radius: 8px; color: #fff; background: var(--status-color); }
+
+/* Column Grid */
+.columns {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  align-items: stretch;
+}
+.column {
+  flex: 1 1 0;
+  min-width: 155px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg) 80%, var(--panel));
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.column.empty { flex: 0 0 100px; min-width: 100px; }
+[data-status="backlog"] { --status-color: var(--s-backlog); }
+[data-status="in-progress"] { --status-color: var(--s-in-progress); }
+[data-status="verify"] { --status-color: var(--s-verify); }
+[data-status="done"] { --status-color: var(--s-done); }
+[data-status="blocked"] { --status-color: var(--s-blocked); }
+
+.column[data-status] {
+  border-top: 3px solid var(--status-color);
+}
+.column-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--status-color);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 4px 6px;
+}
+.cards {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  flex: 1;
+}
+
+/* Card Styling */
+.card {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px 9px;
+  background: var(--panel);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease;
+  user-select: none;
+}
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+  border-color: color-mix(in srgb, var(--status-color) 40%, var(--line));
+}
+.card[data-status] { box-shadow: inset 3px 0 var(--status-color); }
+.card[data-status="done"] { opacity: 0.78; }
+.card[data-status="done"]:hover { opacity: 1; }
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.card-id {
+  font: 10px/1 ui-monospace, monospace;
+  font-weight: 750;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.card-title {
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.card-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+  display: flex;
+}
+.card-progress-fill {
+  background: var(--good);
+  height: 100%;
+}
+.card-progress-skipped {
+  background: var(--muted);
+  height: 100%;
+}
+.card-owner-tag {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 600;
+  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.card-tag {
+  background: var(--panel-elevated);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 9px;
+}
+
+/* ==========================================================================
+   Bottom Master Inspector Drawer
+   ========================================================================== */
+.detail-drawer {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: var(--drawer-height, 420px);
+  min-height: 240px;
+  max-height: 92vh;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-top: 2px solid var(--line);
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
+  transition: height 0.15s ease-out;
+}
+.detail-drawer[hidden] { display: none !important; }
+.detail-drawer.fullscreen {
+  height: 94vh !important;
+  max-height: 94vh;
+}
+
+/* Resizer Handle */
+.drawer-resizer {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 110;
+  background: transparent;
+}
+.drawer-resizer:hover::after, .drawer-resizer.active::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Top Sticky Control Bar */
+.drawer-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel-elevated);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 14px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.drawer-breadcrumb {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.drawer-ref {
+  font: 11px/1 ui-monospace, monospace;
+  font-weight: 750;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.drawer-ref:hover { filter: brightness(1.1); }
+.drawer-status-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--status-color);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.drawer-title {
+  font-size: 14px;
+  font-weight: 750;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-action {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.1s ease;
+}
+.btn-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-close-prominent {
+  background: var(--bg);
+  font-weight: 750;
+  color: var(--text);
+}
+.btn-close-prominent:hover {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+/* Tabs Navigation Bar */
+.drawer-tabs-bar {
+  display: flex;
+  gap: 2px;
+  padding: 0 14px;
+  background: var(--panel-elevated);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.tab-btn {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--panel);
+}
+.tab-badge {
+  font-size: 9px;
+  font-weight: 750;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--line);
+  color: var(--text);
+}
+
+/* Drawer Body: Sidebar + Main Tab View */
+.drawer-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(260px, 310px) 1fr;
+  overflow: hidden;
+}
+@media (max-width: 860px) {
+  .drawer-body { grid-template-columns: 1fr; }
+  .drawer-sidebar { display: none; }
+}
+
+/* Left Sidebar (Metadata, Live Lease & Files) */
+.drawer-sidebar {
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+  padding: 10px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sidebar-section {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 8px 10px;
+  box-shadow: var(--shadow-sm);
+}
+.sidebar-section-head {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sidebar-prop {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.sidebar-prop:last-child { margin-bottom: 0; }
+.prop-label { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.prop-val { font-size: 12px; font-weight: 600; color: var(--text); }
+
+.live-countdown-box {
+  font: 11px/1.3 ui-monospace, monospace;
+  font-weight: 750;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--good-soft);
+  color: var(--good);
+  border: 1px solid color-mix(in srgb, var(--good) 30%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.live-countdown-box.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+.live-countdown-box.expired {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+}
+
+/* Main Tab View Area */
+.drawer-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--panel);
+}
+.tab-content {
+  padding: 12px 18px 24px;
+  display: none;
+  min-width: 0;
+}
+.tab-content.active { display: block; }
+
+/* Tab 1: Visual DAG Component */
+.dag-viz-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dag-lanes-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dag-lane-row {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+  padding: 8px 10px;
+}
+.dag-lane-header {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--epic);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dag-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+.dag-node-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+.dag-node-card.done {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 6%, var(--panel));
+}
+.dag-node-card.ready {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: pulse-ready 2s infinite ease-in-out;
+}
+@keyframes pulse-ready {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 60%, transparent); }
+}
+.dag-node-card.skipped {
+  opacity: 0.65;
+  text-decoration: line-through;
+  background: var(--bg);
+}
+.dag-node-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.dag-nid {
+  font: 11px/1 ui-monospace, monospace;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.dag-node-card.done .dag-nid {
+  background: var(--good);
+  color: #fff;
+  border-color: var(--good);
+}
+.dag-node-card.ready .dag-nid {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.dag-node-text {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.dag-node-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+
+/* Badges */
+.badge-start { background: color-mix(in srgb, var(--proj) 25%, transparent); color: var(--proj); border: 1px solid var(--proj); padding: 1px 4px; border-radius: 3px; font-weight: 750; font-size: 9px; }
+.badge-acc-mandatory { background: color-mix(in srgb, var(--warn) 25%, transparent); color: var(--warn); border: 1px solid var(--warn); padding: 1px 5px; border-radius: 3px; font-weight: 800; font-size: 9px; }
+.badge-acc-optional { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); border: 1px solid var(--good); padding: 1px 4px; border-radius: 3px; font-weight: 750; font-size: 9px; }
+.badge-lane { background: color-mix(in srgb, var(--epic) 20%, transparent); color: var(--epic); border: 1px solid var(--epic); padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: 700; }
+.badge-after { background: var(--bg); color: var(--muted); border: 1px solid var(--line); padding: 1px 4px; border-radius: 3px; font: 9px/1 ui-monospace, monospace; }
+.badge-when { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); border: 1px solid var(--accent); padding: 1px 4px; border-radius: 3px; font-size: 9px; }
+.badge-parallel { background: color-mix(in srgb, var(--proj) 15%, transparent); color: var(--proj); border: 1px solid var(--proj); padding: 1px 4px; border-radius: 3px; font-size: 9px; }
+.badge-optional { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); border: 1px solid var(--good); padding: 1px 4px; border-radius: 3px; font-size: 9px; }
+
+/* Tab 2: Ticket Spec (Zero Spacing Void) */
+.spec-section {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-elevated);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.spec-section-head {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--line) 40%, transparent);
+  border-bottom: 1px solid var(--line);
+  color: var(--accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.spec-section-body {
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.spec-section-body p { margin: 0 0 8px; }
+.spec-section-body p:last-child { margin-bottom: 0; }
+.code-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font: 11px/1.45 ui-monospace, monospace;
+  overflow-x: auto;
+  margin: 4px 0;
+}
+
+/* Tab 3: Execution Log Timeline */
+.timeline-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.timeline-item {
+  border-left: 3px solid var(--line);
+  padding: 4px 0 4px 12px;
+  position: relative;
+}
+.timeline-item.done { border-left-color: var(--good); }
+.timeline-item.skip { border-left-color: var(--muted); }
+.timeline-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.timeline-ts { font: 10px/1 ui-monospace, monospace; color: var(--muted); }
+.timeline-nid { font-weight: 800; color: var(--text); }
+.timeline-kind { font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
+.timeline-kind.done { background: var(--good); color: #fff; }
+.timeline-kind.skip { background: var(--muted); color: #fff; }
+.timeline-proof {
+  font: 11px/1.4 ui-monospace, monospace;
+  background: var(--panel-elevated);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 9px;
+  color: var(--text);
+}
+
+/* Tab 5: Living Architecture Reader */
+.charter-box {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-elevated);
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.charter-title { font-size: 13px; font-weight: 800; color: var(--proj); margin: 0 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
 </style>
 </head>
 <body>
+
 <header>
-  <div class="top">
-    <div class="brand">Kanban Board</div>
-    <div class="totals" id="totals"></div>
-    <div class="meta" id="refreshed">Refreshed: —</div>
-    <div class="meta connection" id="connection"><span class="dot"></span><span>offline</span></div>
+  <div class="header-row">
+    <div class="brand-group">
+      <div class="brand-title"><span>📋</span> Kanban Board</div>
+      <div id="board-dir" class="board-dir-badge" title="Active Canonical Board Directory">📁 board/</div>
+    </div>
+    
+    <!-- Active Leases Live HUD -->
+    <div class="active-leases-hud" id="active-leases-hud"></div>
+
+    <div class="hud-telemetry">
+      <div class="totals" id="totals"></div>
+      <div class="conn-pill" id="conn-pill"><span class="conn-dot"></span><span id="conn-text">offline</span></div>
+      <button class="filter-input" id="btn-theme" type="button" title="Toggle Theme (t)">🌓</button>
+      <button class="filter-input" id="btn-refresh" type="button" title="Refresh Board">↻</button>
+    </div>
   </div>
-  <div class="filters" id="filters"></div>
+
+  <div class="filters-row" id="filters-row">
+    <input type="text" id="f-q" class="filter-input" placeholder="Search ref, title, note, agent (/)">
+    <select id="f-project" class="filter-input"></select>
+    <select id="f-epic" class="filter-input"></select>
+    <select id="f-status" class="filter-input"></select>
+    <label class="filter-input" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+      <input type="checkbox" id="f-hidedone"> Hide Done
+    </label>
+    <span id="f-count" style="font-size:11px;color:var(--muted);margin-left:auto;">—</span>
+  </div>
 </header>
-<div id="error" role="alert"></div>
-<main id="board" aria-live="polite"></main>
-<aside id="detail" class="detail" role="dialog" aria-label="Ticket detail" hidden></aside>
+
+<main id="board"></main>
+
+<!-- Bottom Master Inspector Drawer -->
+<aside id="drawer" class="detail-drawer" hidden>
+  <div class="drawer-resizer" id="drawer-resizer"></div>
+  
+  <div class="drawer-topbar">
+    <div class="drawer-title-group">
+      <span class="drawer-breadcrumb" id="d-breadcrumb">project › epic</span>
+      <span class="drawer-ref" id="d-ref" title="Click to copy ticket ref">T001</span>
+      <span class="drawer-status-pill" id="d-status">in-progress</span>
+      <h2 class="drawer-title" id="d-title">Ticket Title</h2>
+    </div>
+
+    <div class="drawer-actions">
+      <button class="btn-action" id="btn-copy-ref" type="button">📋 Copy Ref</button>
+      <button class="btn-action" id="btn-expand" type="button">⛶ Expand</button>
+      <button class="btn-action btn-close-prominent" id="btn-close-drawer" type="button" title="Close (Esc)">✕ Close</button>
+    </div>
+  </div>
+
+  <div class="drawer-tabs-bar" id="drawer-tabs">
+    <button class="tab-btn active" data-tab="dag"><span>📊</span> Visual DAG Graph</button>
+    <button class="tab-btn" data-tab="spec"><span>📝</span> Ticket Spec &amp; Plan</button>
+    <button class="tab-btn" data-tab="timeline"><span>📜</span> Process Audit Stream <span class="tab-badge" id="d-audit-count">0</span></button>
+    <button class="tab-btn" data-tab="files"><span>📁</span> Touched Files &amp; Attachments <span class="tab-badge" id="d-files-count">0</span></button>
+    <button class="tab-btn" data-tab="charter"><span>📖</span> Living Architecture</button>
+  </div>
+
+  <div class="drawer-body">
+    <!-- Left Metadata Sidebar -->
+    <div class="drawer-sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-head"><span>👤 Ownership &amp; Lease</span></div>
+        <div class="sidebar-prop">
+          <span class="prop-label">Agent</span>
+          <span class="prop-val" id="d-agent">Unassigned</span>
+        </div>
+        <div class="sidebar-prop">
+          <span class="prop-label">Live Lease Status</span>
+          <div id="d-lease-box" class="live-countdown-box">Unclaimed</div>
+        </div>
+        <div class="sidebar-prop" id="d-session-wrap">
+          <span class="prop-label">Session ID</span>
+          <span class="prop-val" id="d-session" style="font-family:ui-monospace,monospace;font-size:10px;">—</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-head"><span>📈 DAG Execution Progress</span></div>
+        <div class="sidebar-prop">
+          <span class="prop-label">Checkpoints Ratio</span>
+          <span class="prop-val" id="d-progress-text">0 / 0 nodes</span>
+        </div>
+        <div class="card-progress-bar" style="height:6px;margin-top:2px;">
+          <div class="card-progress-fill" id="d-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="sidebar-section" id="d-qa-note-wrap">
+        <div class="sidebar-section-head"><span>📝 Note / QA Note</span></div>
+        <div id="d-note" style="font-size:11px;font-style:italic;color:var(--text);border-left:2px solid var(--accent);padding-left:6px;">—</div>
+      </div>
+    </div>
+
+    <!-- Main Tab View Area -->
+    <div class="drawer-main">
+      <!-- Tab 1: Visual DAG Graph -->
+      <div class="tab-content active" id="tab-dag">
+        <div class="dag-viz-container" id="dag-container"></div>
+      </div>
+
+      <!-- Tab 2: Ticket Spec & Plan -->
+      <div class="tab-content" id="tab-spec">
+        <div id="spec-container"></div>
+      </div>
+
+      <!-- Tab 3: Process Audit Stream -->
+      <div class="tab-content" id="tab-timeline">
+        <div class="timeline-stream" id="timeline-container"></div>
+      </div>
+
+      <!-- Tab 4: Touched Files & Attachments -->
+      <div class="tab-content" id="tab-files">
+        <div id="files-container"></div>
+      </div>
+
+      <!-- Tab 5: Living Architecture Reader -->
+      <div class="tab-content" id="tab-charter">
+        <div id="charter-container"></div>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <script>
 const statuses = ["backlog", "in-progress", "verify", "done", "blocked"];
-let detailRef = null, detailReturn = null;
+let currentBoardData = null;
+let currentTicketRef = null;
 const ticketIndex = new Map();
 const $ = id => document.getElementById(id);
 
@@ -138,436 +1017,82 @@ function add(parent, tag, cls, text) {
   parent.append(node);
   return node;
 }
-function store(key, value) {
-  try {
-    if (value === undefined) return localStorage.getItem(key);
-    localStorage.setItem(key, value);
-  } catch(e) { return null; }
-}
-
-function parseDate(value) {
-  if (!value) return null;
-  const date = new Date(value.length === 10 ? value + "T00:00:00" : value.replace(" ", "T"));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-function age(value) {
-  const date = parseDate(value);
-  if (!date) return value ? "since " + value : "since ?";
-  const hours = Math.max(0, Math.floor((Date.now() - date.getTime()) / 3600000));
-  return hours < 1 ? "<1h" : hours < 24 ? hours + "h" : Math.floor(hours / 24) + "d";
-}
-
-function ticketLabel(ticket) {
-  return [ticket.id, ticket.title || "Ticket", "Status: " + (ticket.status || "unknown"), ticket.note ? "Note: " + ticket.note : ""].filter(Boolean).join(" · ");
-}
-
-function ticketCard(ticket, issues) {
-  const card = el("article", "card");
-  card.dataset.status = ticket.status;
-  const top = add(card, "div", "card-top");
-  if (ticket.id) add(top, "span", "id", ticket.id);
-  add(top, "span", "title", ticket.title || "Untitled ticket");
-  if (ticket.priority) add(top, "span", "priority " + ticket.priority, ticket.priority);
-  const details = add(card, "div", "details");
-  if (ticket.assignee) add(details, "span", "", ticket.assignee);
-  if (ticket.owner && ticket.owner.agent) {
-    const ownerSpan = add(details, "span", "owner-badge", "👤 " + ticket.owner.agent);
-    ownerSpan.title = "Claimed by " + ticket.owner.agent + (ticket.lease_status ? " (" + ticket.lease_status + ")" : "");
-  }
-  const ageLabel = add(details, "span", "age", age(ticket.since));
-  const since = parseDate(ticket.since);
-  const ageHours = since ? (Date.now() - since.getTime()) / 3600000 : 0;
-  if (["in-progress", "verify", "blocked"].includes(ticket.status) && ageHours > 24) {
-    ageLabel.classList.add("stale");
-    ageLabel.title = "stale";
-    if (ageHours > 72) ageLabel.classList.add("stale-critical");
-  }
-  card.title = ticket.reference + (ticket.since ? " · " + ticket.status + " since " + ticket.since : "");
-  if (ticket.depends && ticket.depends.length) add(details, "span", "deps", "→ " + ticket.depends.join(", "));
-  if (ticket.note) {
-    const text = add(card, "div", ticket.status === "blocked" ? "reason" : "ticket-note", ticket.note);
-    text.title = ticket.note;
-  }
-  card.tabIndex = 0;
-  card.setAttribute("role", "button");
-  card.dataset.ref = ticket.reference;
-  card.setAttribute("aria-label", ticketLabel(ticket));
-  card.onclick = () => { detailReturn = card; openDetail(ticket.reference, true); };
-  card.onkeydown = event => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      detailReturn = card;
-      openDetail(ticket.reference, true);
-    }
-  };
-  return card;
-}
-
 function copyText(str, btn) {
   if (!navigator.clipboard) return;
   navigator.clipboard.writeText(str).then(() => {
     const orig = btn.textContent;
-    btn.textContent = "✓";
+    btn.textContent = "✓ Copied";
     setTimeout(() => { btn.textContent = orig; }, 1200);
   });
 }
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-function renderMarkdownBody(text) {
-  if (!text) return '<div class="empty-note">(empty body)</div>';
-  const clean = text.trim();
-  const escapeHtml = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/* ==========================================================================
+   Live Lease Ticking Engine
+   ========================================================================== */
+function formatTimeRemaining(expiresIso) {
+  if (!expiresIso) return { text: "No expiry", state: "normal", seconds: 999999 };
+  const exp = new Date(expiresIso).getTime();
+  const diff = exp - Date.now();
+  if (diff <= 0) return { text: "⚠️ Lease Expired", state: "expired", seconds: 0 };
+  const mins = Math.floor(diff / 60000);
+  const secs = Math.floor((diff % 60000) / 1000);
+  const state = mins < 10 ? "warn" : "normal";
+  return { text: `⏱ ${mins}m ${secs < 10 ? "0" : ""}${secs}s left`, state, seconds: Math.floor(diff / 1000) };
+}
 
-  let html = "";
-  const lines = clean.split("\n");
-  let inCode = false, codeLang = "", codeLines = [];
-
-  for (let line of lines) {
-    if (line.startsWith("```")) {
-      if (inCode) {
-        html += `<pre class="code-block"><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
-        codeLines = [];
-        inCode = false;
-      } else {
-        inCode = true;
-        codeLang = line.slice(3).trim();
+setInterval(() => {
+  // Update Header HUD Active Leases
+  const hud = $("active-leases-hud");
+  if (hud && currentBoardData) {
+    const active = [];
+    const tickets = (currentBoardData.board?.projects || []).flatMap(p => p.tickets || []);
+    for (const t of tickets) {
+      if (t.status === "in-progress" && t.owner && t.owner.agent) {
+        const info = formatTimeRemaining(t.owner.lease_expires);
+        active.push({ ref: t.reference, agent: t.owner.agent, info });
       }
-      continue;
     }
-    if (inCode) {
-      codeLines.push(line);
-      continue;
-    }
-
-    if (line.startsWith("## ")) {
-      html += `<h3 class="spec-header">${escapeHtml(line.slice(3))}</h3>`;
-      continue;
-    }
-    if (line.startsWith("### ")) {
-      html += `<h4 class="spec-sub">${escapeHtml(line.slice(4))}</h4>`;
-      continue;
-    }
-
-    const todoMatch = line.match(/^(\s*)-\s*\[([ xX-])\]\s*(.*)$/);
-    if (todoMatch) {
-      const indent = Math.floor(todoMatch[1].length / 2);
-      const mark = todoMatch[2].toLowerCase();
-      const isChecked = mark === "x";
-      const isSkipped = mark === "-";
-      let taskText = escapeHtml(todoMatch[3]);
-      taskText = taskText.replace(/\[START\]/gi, '<span class="badge-start">[START]</span>');
-      taskText = taskText.replace(/\[ACCEPTANCE:MANDATORY\]/gi, '<span class="badge-acc-mandatory">[ACCEPTANCE:MANDATORY]</span>');
-      taskText = taskText.replace(/\[ACCEPTANCE:OPTIONAL\]/gi, '<span class="badge-acc-optional">[ACCEPTANCE:OPTIONAL]</span>');
-      taskText = taskText.replace(/\[ACCEPTANCE\]/gi, '<span class="badge-acc">[ACCEPTANCE]</span>');
-      taskText = taskText.replace(/\[CHOSEN\]/gi, '<span class="badge-chosen">[CHOSEN]</span>');
-      taskText = taskText.replace(/\[lane:([^\]]+)\]/gi, '<span class="badge-lane">[lane:$1]</span>');
-      taskText = taskText.replace(/\[after:([^\]]+)\]/gi, '<span class="badge-after">[after:$1]</span>');
-      taskText = taskText.replace(/\[when:([^\]]+)\]/gi, '<span class="badge-when">[when:$1]</span>');
-      taskText = taskText.replace(/\[parallel\]/gi, '<span class="badge-parallel">[parallel]</span>');
-      taskText = taskText.replace(/\[optional\]/gi, '<span class="badge-optional">[optional]</span>');
-      taskText = taskText.replace(/`([^`]+)`/g, '<code>$1</code>');
-      const cls = isChecked ? 'todo-done' : (isSkipped ? 'todo-skipped' : 'todo-open');
-      const checkIcon = isChecked ? '☑' : (isSkipped ? '⊝' : '☐');
-      html += `<div class="todo-item indent-${indent} ${cls}">
-        <span class="todo-check">${checkIcon}</span>
-        <span class="todo-text">${taskText}</span>
-      </div>`;
-      continue;
-    }
-
-    const listMatch = line.match(/^(\s*)-\s*(.*)$/);
-    if (listMatch) {
-      const indent = Math.floor(listMatch[1].length / 2);
-      let itemText = escapeHtml(listMatch[2]);
-      itemText = itemText.replace(/`([^`]+)`/g, '<code>$1</code>');
-      html += `<div class="bullet-item indent-${indent}">• ${itemText}</div>`;
-      continue;
-    }
-
-    if (line.trim()) {
-      let pText = escapeHtml(line);
-      pText = pText.replace(/`([^`]+)`/g, '<code>$1</code>');
-      html += `<p class="spec-p">${pText}</p>`;
-    }
-  }
-  if (inCode && codeLines.length) {
-    html += `<pre class="code-block"><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
-  }
-  return html;
-}
-
-function openDetail(reference, focus = false) {
-  const ticket = ticketIndex.get(reference), panel = $("detail");
-  if (!ticket) { closeDetail(); return; }
-  detailRef = reference;
-  panel.replaceChildren();
-  panel.hidden = false;
-  document.body.classList.add("has-detail");
-
-  // Sticky top bar: Title, Breadcrumb, Ref, and Close button ALWAYS in view at top right
-  const bar = add(panel, "div", "detail-bar");
-  const titleGroup = add(bar, "div", "detail-title-group");
-
-  const parts = reference.split("/");
-  if (parts.length >= 2) {
-    add(titleGroup, "span", "detail-breadcrumb", parts.slice(0, 2).join(" › "));
-  }
-
-  const refBadge = add(titleGroup, "span", "detail-ref", ticket.id || reference);
-  refBadge.title = "Click to copy ticket reference";
-  refBadge.onclick = () => copyText(reference, refBadge);
-
-  const statusBadge = add(titleGroup, "span", "status-pill", ticket.status);
-  statusBadge.dataset.status = ticket.status;
-
-  add(titleGroup, "h2", "detail-title", ticket.title || "Ticket");
-
-  const actions = add(bar, "div", "detail-actions");
-  const close = add(actions, "button", "detail-close", "✕ Close");
-  close.type = "button";
-  close.title = "Close (Esc)";
-  close.onclick = closeDetail;
-
-  // Split content grid
-  const content = add(panel, "div", "detail-content");
-  const sidebar = add(content, "div", "detail-sidebar");
-  const mainArea = add(content, "div", "detail-main");
-
-  // 1. Ownership & Multi-Agent Lease Subsystem Card
-  const oCard = add(sidebar, "div", "detail-card");
-  const oHead = add(oCard, "div", "detail-card-head");
-  oHead.innerHTML = `<span>👤 Ownership &amp; Lease Control</span>`;
-
-  if (ticket.lease_status) {
-    const isExpired = ticket.lease_status.includes("expired");
-    const isUnclaimed = ticket.lease_status.includes("unclaimed");
-    const badgeCls = isExpired ? "lease-expired" : (isUnclaimed ? "lease-unclaimed" : "lease-active");
-    add(oHead, "span", "lease-badge " + badgeCls, ticket.lease_status);
-  }
-
-  const oGrid = add(oCard, "div", "owner-grid");
-
-  // Assigned Agent
-  const pAgent = add(oGrid, "div", "owner-prop");
-  add(pAgent, "span", "owner-key", "Assigned Agent");
-  add(pAgent, "span", "owner-val agent-name", ticket.owner && ticket.owner.agent ? "👤 " + ticket.owner.agent : "(unassigned)");
-
-  // State Since
-  const pSince = add(oGrid, "div", "owner-prop");
-  add(pSince, "span", "owner-key", "State Since");
-  add(pSince, "span", "owner-val", ticket.since ? ticket.since.replace("T", " ").replace("Z", "") : "—");
-
-  // Session ID with Copy button
-  if (ticket.owner && ticket.owner.session_id) {
-    const pSess = add(oGrid, "div", "owner-prop owner-full");
-    add(pSess, "span", "owner-key", "Agent Session ID");
-    const sBox = add(pSess, "div", "session-box");
-    add(sBox, "span", "session-id-text", ticket.owner.session_id);
-    const sCopy = add(sBox, "button", "btn-copy-mini", "📋");
-    sCopy.type = "button";
-    sCopy.title = "Copy session ID";
-    sCopy.onclick = () => copyText(ticket.owner.session_id, sCopy);
-  }
-
-  // Claimed At & Lease Expires
-  if (ticket.owner && ticket.owner.claimed_at) {
-    const pClaim = add(oGrid, "div", "owner-prop");
-    add(pClaim, "span", "owner-key", "Claimed At");
-    add(pClaim, "span", "owner-val", ticket.owner.claimed_at.replace("T", " ").replace("Z", ""));
-  }
-  if (ticket.owner && ticket.owner.lease_expires) {
-    const pExp = add(oGrid, "div", "owner-prop");
-    add(pExp, "span", "owner-key", "Lease Expires");
-    add(pExp, "span", "owner-val", ticket.owner.lease_expires.replace("T", " ").replace("Z", ""));
-  }
-
-  // 2. Progress / Audit Note Card (if set)
-  if (ticket.note) {
-    const nCard = add(sidebar, "div", "detail-card");
-    const nHead = add(nCard, "div", "detail-card-head");
-    nHead.innerHTML = `<span>📝 Progress / QA Note</span>`;
-    add(nCard, "div", "note-quote", ticket.note);
-  }
-
-  // 3. Tracked Files Card (if set)
-  if (ticket.files && ticket.files.length) {
-    const fCard = add(sidebar, "div", "detail-card");
-    const fHead = add(fCard, "div", "detail-card-head");
-    fHead.innerHTML = `<span>📁 Tracked Files (${ticket.files.length})</span>`;
-    const fList = add(fCard, "div", "files-scroll");
-    for (const f of ticket.files) {
-      const fItem = add(fList, "div", "file-entry");
-      add(fItem, "span", "file-path", "📄 " + f);
-      const fCopy = add(fItem, "button", "btn-copy-mini", "📋");
-      fCopy.type = "button";
-      fCopy.title = "Copy file path";
-      fCopy.onclick = (e) => { e.stopPropagation(); copyText(f, fCopy); };
-      fItem.onclick = () => copyText(f, fCopy);
+    hud.replaceChildren();
+    for (const a of active) {
+      const pill = add(hud, "span", "lease-pill " + (a.info.state === "expired" ? "expired" : ""));
+      pill.innerHTML = `👤 <b>${escapeHtml(a.agent)}</b>: ${escapeHtml(a.ref.split("/").pop())} (${escapeHtml(a.info.text)})`;
+      pill.onclick = () => openDetail(a.ref);
+      pill.style.cursor = "pointer";
     }
   }
 
-  // 4. Attachments Card (if set)
-  if (ticket.attachments && ticket.attachments.length) {
-    const aCard = add(sidebar, "div", "detail-card");
-    const aHead = add(aCard, "div", "detail-card-head");
-    aHead.innerHTML = `<span>📎 Attachments (${ticket.attachments.length})</span>`;
-    const aList = add(aCard, "div", "attachments-list");
-    for (const a of ticket.attachments) {
-      const aItem = add(aList, "div", "att-entry");
-      add(aItem, "div", "att-title", "📎 " + (a.name || a.path));
-      if (a.desc) add(aItem, "div", "att-desc", a.desc);
+  // Update Drawer Lease Counter
+  if (currentTicketRef && ticketIndex.has(currentTicketRef)) {
+    const t = ticketIndex.get(currentTicketRef);
+    const box = $("d-lease-box");
+    if (box && t.owner && t.owner.agent) {
+      const info = formatTimeRemaining(t.owner.lease_expires);
+      box.className = "live-countdown-box " + info.state;
+      box.textContent = info.text;
     }
   }
+}, 1000);
 
-  // 5. Dependencies Card (if set)
-  if (ticket.depends && ticket.depends.length) {
-    const dCard = add(sidebar, "div", "detail-card");
-    const dHead = add(dCard, "div", "detail-card-head");
-    dHead.innerHTML = `<span>🔗 Dependencies</span>`;
-    const dWrap = add(dCard, "div", "deps-wrap");
-    for (const ref of ticket.depends) {
-      const target = ticketIndex.get(ref);
-      const button = add(dWrap, "button", "dep", ref + " (" + (target ? target.status : "missing") + ")");
-      button.type = "button";
-      button.disabled = !target;
-      button.onclick = () => openDetail(ref, true);
-    }
-  }
-
-  // Right Side: Specification Box
-  const specBox = add(mainArea, "div", "spec-box");
-  const specBar = add(specBox, "div", "spec-bar");
-  add(specBar, "span", "spec-title", "Ticket Specification & Execution Plan");
-
-  const toggleRaw = add(specBar, "button", "btn-toggle-raw", "Raw Markdown");
-  toggleRaw.type = "button";
-
-  const renderView = add(specBox, "div", "spec-render");
-  renderView.innerHTML = renderMarkdownBody(ticket.body || "");
-
-  const rawView = add(specBox, "pre", "ticket-body-raw");
-  rawView.textContent = ticket.body ? ticket.body.trim() : "(empty body)";
-  rawView.hidden = true;
-
-  toggleRaw.onclick = () => {
-    const showRaw = rawView.hidden;
-    rawView.hidden = !showRaw;
-    renderView.hidden = showRaw;
-    toggleRaw.textContent = showRaw ? "Formatted View" : "Raw Markdown";
-  };
-
-  if (focus) close.focus();
-}
-
-function closeDetail() {
-  detailRef = null;
-  $("detail").hidden = true;
-  document.body.classList.remove("has-detail");
-  if (detailReturn && detailReturn.isConnected) detailReturn.focus();
-}
-
-document.addEventListener("keydown", event => { if (event.key === "Escape") closeDetail(); });
-
-function fold(parent, key, cls, defaultOpen) {
-  const node = add(parent, "details", cls);
-  const saved = store("kb.open." + key);
-  node.open = saved === null ? defaultOpen : saved === "1";
-  node.addEventListener("toggle", () => store("kb.open." + key, node.open ? "1" : "0"));
-  return node;
-}
-
-function docs(parent, key, list) {
-  if (!list || !list.length) return;
-  const box = fold(parent, key + ".docs", "docs", false);
-  add(box, "summary", "docs-toggle", "docs: " + list.map(d => d.name).join(", "));
-  for (const doc of list) {
-    const section = add(box, "section", "doc");
-    add(section, "div", "doc-name", doc.name);
-    add(section, "pre", "doc-body", doc.markdown ? doc.markdown.replace(/^---[\s\S]*?\n---\r?\n/, "") : "");
-  }
-}
-
-function counts(parent, tickets) {
-  const box = add(parent, "span", "counts");
-  for (const status of statuses) {
-    const n = tickets.filter(t => t.status === status).length;
-    if (!n) continue;
-    const chip = add(box, "span", "count", n);
-    chip.dataset.status = status;
-    chip.title = status;
-  }
-}
-
-const filterKeys = ["q", "status", "project", "epic", "hidedone"];
-function readFilters() {
-  const params = new URLSearchParams(location.search);
-  return Object.fromEntries(filterKeys.map(k => [k, params.get(k) || ""]));
-}
-function writeFilters(f) {
-  const params = new URLSearchParams();
-  for (const k of filterKeys) if (f[k]) params.set(k, f[k]);
-  history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
-}
-function matches(t, p, f) {
-  const text = (t.reference + " " + (t.title || "") + " " + (t.note || "") + " " + (t.status || "")).toLowerCase();
-  return (!f.q || text.includes(f.q.toLowerCase())) &&
-         (!f.status || t.status === f.status) &&
-         (!f.project || p.slug === f.project) &&
-         (!f.epic || (p.slug + "/" + t.epic) === f.epic) &&
-         !(f.hidedone && t.status === "done");
-}
-
-let lastData = null;
-function buildFilterBar(board) {
-  const bar = $("filters");
-  const f = readFilters();
-  const all = board.projects.flatMap(p => p.tickets);
-  const options = {
-    status: statuses,
-    project: board.projects.map(p => p.slug),
-    epic: [...new Set(board.projects.flatMap(p => p.epics.map(e => p.slug + "/" + e.slug)))].sort()
-  };
-  if (!bar.dataset.built) {
-    bar.dataset.built = "1";
-    const q = add(bar, "input", "filter");
-    q.id = "f-q";
-    q.placeholder = "filter ref / title / note";
-    q.oninput = () => { const n = readFilters(); n.q = q.value; writeFilters(n); render(lastData); };
-    for (const key of Object.keys(options)) {
-      const s = add(bar, "select", "filter");
-      s.id = "f-" + key;
-      s.onchange = () => { const n = readFilters(); n[key] = s.value; writeFilters(n); render(lastData); };
-    }
-    const label = add(bar, "label", "filter");
-    const cb = add(label, "input");
-    cb.type = "checkbox";
-    cb.id = "f-hidedone";
-    cb.onchange = () => { const n = readFilters(); n.hidedone = cb.checked ? "1" : ""; writeFilters(n); render(lastData); };
-    label.append(" hide done");
-    add(bar, "span", "meta").id = "f-count";
-  }
-  $("f-q").value = f.q;
-  $("f-hidedone").checked = !!f.hidedone;
-  for (const [key, values] of Object.entries(options)) {
-    const s = $("f-" + key);
-    s.replaceChildren();
-    add(s, "option", "", key + ": all").value = "";
-    for (const v of values) {
-      const o = add(s, "option", "", v);
-      o.value = v;
-    }
-    s.value = f[key];
-  }
-}
-
+/* ==========================================================================
+   Render Board Columns & Cards
+   ========================================================================== */
 function render(data) {
   if (!data) return;
-  lastData = data;
+  currentBoardData = data;
   const board = data.board || data;
   const tickets = (board.projects || []).flatMap(p => p.tickets || []);
   ticketIndex.clear();
-  for (const ticket of tickets) ticketIndex.set(ticket.reference, ticket);
-  buildFilterBar(board);
-  const f = readFilters();
+  for (const t of tickets) ticketIndex.set(t.reference, t);
+
+  if (board.board_dir) {
+    $("board-dir").textContent = "📁 " + board.board_dir;
+    $("board-dir").title = "Board Root: " + board.board_dir;
+  }
+
+  // Totals
   const totals = $("totals");
   totals.replaceChildren();
   for (const status of statuses) {
@@ -576,121 +1101,617 @@ function render(data) {
     item.dataset.status = status;
     add(item, "b", "", count);
   }
-  $("refreshed").textContent = "Refreshed: " + new Date().toLocaleTimeString();
+
+  // Build Filters
+  buildFilterOptions(board);
+  const f = getFilterValues();
+
+  // Render Lanes
   const root = $("board");
   root.replaceChildren();
 
   if (!board.projects || !board.projects.length) {
-    const empty = add(root, "section", "empty-state");
-    add(empty, "h2", "", "No Kanban projects yet");
-    add(empty, "p", "", "Create your first project ticket using kanban_create(ref='project/epic/T001', title='...')");
+    const empty = add(root, "div", "spec-section", "No Kanban projects found in board directory.");
     return;
   }
 
-  let visible = 0;
-  for (const project of board.projects) {
-    const lane = fold(root, "p." + project.slug, "lane", true);
-    const head = add(lane, "summary", "lane-head");
-    add(head, "span", "lane-name", project.name || project.slug);
-    add(head, "span", "lane-meta", project.state || "active");
-    if (project.summary) add(head, "span", "lane-summary", project.summary);
-    counts(head, project.tickets || []);
-    docs(lane, "p." + project.slug, [{ name: "project.md", markdown: project.body }, ...(project.docs || [])]);
+  let visibleCount = 0;
+  for (const proj of board.projects) {
+    const lane = add(root, "div", "lane");
+    const head = add(lane, "div", "lane-head");
+    add(head, "span", "lane-name", proj.name || proj.slug);
+    if (proj.summary) add(head, "span", "lane-summary", proj.summary);
+    add(head, "span", "lane-meta", proj.state || "active");
 
-    for (const epic of project.epics || []) {
-      const epicTickets = (project.tickets || []).filter(t => t.epic === epic.slug);
-      const shownTickets = epicTickets.filter(t => matches(t, project, f));
-      visible += shownTickets.length;
-      const box = fold(lane, "e." + project.slug + "." + epic.slug, "epic", true);
-      const eh = add(box, "summary", "epic-head");
-      add(eh, "span", "epic-name", epic.name || epic.slug);
-      add(eh, "span", "lane-meta", epic.state || "active");
-      if (epic.summary) add(eh, "span", "lane-summary", epic.summary);
-      counts(eh, epicTickets);
-      docs(box, "e." + project.slug + "." + epic.slug, [{ name: "epic.md", markdown: epic.body }, ...(epic.docs || [])]);
+    for (const epic of proj.epics || []) {
+      const epicTickets = (proj.tickets || []).filter(t => t.epic === epic.slug);
+      const filtered = epicTickets.filter(t => matchesFilter(t, proj.slug, epic.slug, f));
+      visibleCount += filtered.length;
 
-      const columns = add(box, "div", "columns");
-      for (const status of statuses) {
-        let items = shownTickets.filter(t => t.status === status);
-        if (status === "done") items = items.slice().sort((a,b) => (b.since || "").localeCompare(a.since || ""));
-        const column = add(columns, "section", "column" + (items.length ? "" : " empty"));
-        column.dataset.status = status;
-        const title = add(column, "div", "column-title", status);
-        add(title, "b", "", items.length);
-        const cards = add(column, "div", "cards");
-        if (!items.length) add(cards, "div", "empty-note", "—");
-        for (const t of items) cards.append(ticketCard(t, []));
+      const eBox = add(lane, "div", "epic");
+      const eHead = add(eBox, "div", "epic-head");
+      add(eHead, "span", "epic-name", epic.name || epic.slug);
+      if (epic.summary) add(eHead, "span", "lane-summary", epic.summary);
+      
+      const countsBox = add(eHead, "span", "counts");
+      for (const st of statuses) {
+        const c = epicTickets.filter(t => t.status === st).length;
+        if (c > 0) {
+          const chip = add(countsBox, "span", "count", c);
+          chip.dataset.status = st;
+        }
+      }
+
+      const colWrap = add(eBox, "div", "columns");
+      for (const st of statuses) {
+        const colTickets = filtered.filter(t => t.status === st);
+        const col = add(colWrap, "div", "column" + (colTickets.length ? "" : " empty"));
+        col.dataset.status = st;
+        const colTitle = add(col, "div", "column-title", st);
+        add(colTitle, "span", "", colTickets.length);
+
+        const cardsWrap = add(col, "div", "cards");
+        for (const t of colTickets) {
+          cardsWrap.append(renderCard(t));
+        }
       }
     }
   }
-  $("f-count").textContent = visible + " / " + tickets.length + " tickets";
-  if (detailRef && ticketIndex.has(detailRef)) openDetail(detailRef);
-}
 
-let refreshSequence = 0, source = null;
-async function refresh() {
-  if (window.__INITIAL_DATA__) {
-    render(window.__INITIAL_DATA__);
-    $("connection").classList.add("live");
-    $("connection").lastElementChild.textContent = "embedded";
-  }
-  const sequence = ++refreshSequence;
-  try {
-    const response = await fetch("/api/board", { cache: "no-store" });
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
-    if (sequence !== refreshSequence) return;
-    render(data);
-    $("connection").classList.add("live");
-    $("connection").lastElementChild.textContent = "live";
-    $("error").textContent = "";
-  } catch (error) {
-    if (window.__INITIAL_DATA__) return;
-    if (sequence !== refreshSequence) return;
-    $("connection").classList.remove("live");
-    $("connection").lastElementChild.textContent = "offline";
-    $("error").textContent = "Could not load board: " + error.message;
+  $("f-count").textContent = `${visibleCount} / ${tickets.length} tickets`;
+  if (currentTicketRef && ticketIndex.has(currentTicketRef)) {
+    openDetail(currentTicketRef, false);
   }
 }
 
-function setLive(enabled) {
-  if (source) { source.close(); source = null; }
-  $("connection").classList.remove("live");
-  $("connection").lastElementChild.textContent = enabled ? "connecting" : "paused";
-  if (!enabled) return;
-  try {
-    source = new EventSource("/events");
-    source.onopen = () => { $("connection").classList.add("live"); $("connection").lastElementChild.textContent = "live"; };
-    source.onerror = () => { $("connection").classList.remove("live"); $("connection").lastElementChild.textContent = "stale"; };
-    source.onmessage = refresh;
-  } catch(e) {}
+function renderCard(t) {
+  const card = el("div", "card");
+  card.dataset.status = t.status;
+  card.onclick = () => openDetail(t.reference, true);
+
+  const head = add(card, "div", "card-header");
+  add(head, "span", "card-id", t.id || t.reference.split("/").pop());
+  add(head, "span", "card-title", t.title || "Untitled");
+
+  const meta = add(card, "div", "card-meta-row");
+  if (t.owner && t.owner.agent) {
+    const oTag = add(meta, "span", "card-owner-tag", "👤 " + t.owner.agent);
+    if (t.status === "in-progress" && t.owner.lease_expires) {
+      const info = formatTimeRemaining(t.owner.lease_expires);
+      add(oTag, "span", "", info.text);
+    }
+  }
+  if (t.files && t.files.length) {
+    add(meta, "span", "card-tag", "📁 " + t.files.length);
+  }
+  if (t.attachments && t.attachments.length) {
+    add(meta, "span", "card-tag", "📎 " + t.attachments.length);
+  }
+
+  // Progress Bar
+  if (t.dag_nodes && t.dag_nodes.length) {
+    const done = t.dag_nodes.filter(n => n.status === "done").length;
+    const skipped = t.dag_nodes.filter(n => n.status === "skipped").length;
+    const total = t.dag_nodes.length;
+    const bar = add(card, "div", "card-progress-bar");
+    const fill = add(bar, "div", "card-progress-fill");
+    fill.style.width = ((done / total) * 100) + "%";
+    const skipFill = add(bar, "div", "card-progress-skipped");
+    skipFill.style.width = ((skipped / total) * 100) + "%";
+    add(meta, "span", "", `${done}/${total} nodes`);
+  }
+
+  return card;
 }
 
-// Support MCP App postMessage updates
-window.addEventListener("message", event => {
-  if (event.data && (event.data.type === "kanban_update" || event.data.board)) {
-    render(event.data.board ? event.data : { board: event.data });
+/* ==========================================================================
+   Master Inspector Drawer (Bottom Panel)
+   ========================================================================== */
+function openDetail(ref, switchTab = false) {
+  const t = ticketIndex.get(ref);
+  const drawer = $("drawer");
+  if (!t || !drawer) return;
+  currentTicketRef = ref;
+
+  drawer.hidden = false;
+  document.body.classList.add("has-detail");
+
+  // Top Bar Info
+  const parts = ref.split("/");
+  $("d-breadcrumb").textContent = parts.slice(0, 2).join(" › ");
+  $("d-ref").textContent = t.id || parts[2] || ref;
+  $("d-title").textContent = t.title || "Untitled";
+  $("d-status").textContent = t.status;
+  $("d-status").dataset.status = t.status;
+
+  // Sidebar Metadata
+  $("d-agent").textContent = t.owner && t.owner.agent ? `👤 ${t.owner.agent}` : "(unassigned)";
+  const leaseBox = $("d-lease-box");
+  if (t.owner && t.owner.lease_expires) {
+    const info = formatTimeRemaining(t.owner.lease_expires);
+    leaseBox.className = "live-countdown-box " + info.state;
+    leaseBox.textContent = info.text;
+  } else {
+    leaseBox.className = "live-countdown-box";
+    leaseBox.textContent = t.lease_status || "Unclaimed";
+  }
+
+  if (t.owner && t.owner.session_id) {
+    $("d-session-wrap").style.display = "flex";
+    $("d-session").textContent = t.owner.session_id;
+  } else {
+    $("d-session-wrap").style.display = "none";
+  }
+
+  if (t.dag_nodes && t.dag_nodes.length) {
+    const done = t.dag_nodes.filter(n => n.status === "done").length;
+    $("d-progress-text").textContent = `${done} / ${t.dag_nodes.length} checkpoints passed`;
+    $("d-progress-fill").style.width = `${(done / t.dag_nodes.length) * 100}%`;
+  } else {
+    $("d-progress-text").textContent = "No Todo Tree";
+    $("d-progress-fill").style.width = "0%";
+  }
+
+  if (t.note) {
+    $("d-qa-note-wrap").style.display = "block";
+    $("d-note").textContent = t.note;
+  } else {
+    $("d-qa-note-wrap").style.display = "none";
+  }
+
+  // Counts on Tabs
+  const auditEntries = Object.values(t.execution_log || {}).flat();
+  $("d-audit-count").textContent = auditEntries.length;
+  $("d-files-count").textContent = (t.files?.length || 0) + (t.attachments?.length || 0);
+
+  // Tab 1: Render Visual DAG
+  renderVisualDag(t);
+
+  // Tab 2: Render Spec (Zero spacing void!)
+  renderSpecSections(t);
+
+  // Tab 3: Render Execution Log Timeline
+  renderTimeline(t);
+
+  // Tab 4: Render Files & Attachments
+  renderFilesTab(t);
+
+  // Tab 5: Render Living Architecture
+  renderLivingArchitecture(t);
+}
+
+function closeDrawer() {
+  currentTicketRef = null;
+  $("drawer").hidden = true;
+  document.body.classList.remove("has-detail");
+}
+
+/* ==========================================================================
+   Tab 1: Visual DAG Graph Renderer
+   ========================================================================== */
+function renderVisualDag(t) {
+  const container = $("dag-container");
+  container.replaceChildren();
+
+  const nodes = t.dag_nodes || [];
+  if (!nodes.length) {
+    container.innerHTML = `<div class="spec-section-body" style="color:var(--muted);text-align:center;padding:24px;">No structured Todo Tree DAG found on this ticket.</div>`;
+    return;
+  }
+
+  const readySet = new Set(t.ready_nodes || []);
+  const byLane = new Map();
+  for (const n of nodes) {
+    const laneName = n.lane || "main";
+    if (!byLane.has(laneName)) byLane.set(laneName, []);
+    byLane.get(laneName).push(n);
+  }
+
+  const lanesWrap = add(container, "div", "dag-lanes-wrap");
+  for (const [laneName, laneNodes] of byLane.entries()) {
+    const laneRow = add(lanesWrap, "div", "dag-lane-row");
+    const lHead = add(laneRow, "div", "dag-lane-header");
+    lHead.innerHTML = `<span>⛭ Lane: <b>${escapeHtml(laneName)}</b> (${laneNodes.length} nodes)</span>`;
+
+    const grid = add(laneRow, "div", "dag-nodes-grid");
+    for (const n of laneNodes) {
+      const card = add(grid, "div", "dag-node-card");
+      if (n.status === "done") card.classList.add("done");
+      if (n.status === "skipped") card.classList.add("skipped");
+      if (readySet.has(n.id)) card.classList.add("ready");
+
+      const head = add(card, "div", "dag-node-head");
+      add(head, "span", "dag-nid", n.id);
+      
+      if (n.is_start) add(head, "span", "badge-start", "[START]");
+      if (n.is_parallel) add(head, "span", "badge-parallel", "[parallel]");
+      if (n.is_optional) add(head, "span", "badge-optional", "[optional]");
+      if (n.when) add(head, "span", "badge-when", `[when:${n.when.branch}]`);
+      if (n.acceptance_kind === "MANDATORY") add(head, "span", "badge-acc-mandatory", "★ ACCEPTANCE");
+      if (n.acceptance_kind === "OPTIONAL") add(head, "span", "badge-acc-optional", "ACCEPTANCE:OPT");
+      if (readySet.has(n.id)) add(head, "span", "badge-start", "⚡ READY TO RUN");
+
+      add(card, "div", "dag-node-text", n.text);
+
+      if (n.after_clauses && n.after_clauses.length) {
+        const footer = add(card, "div", "dag-node-footer");
+        const prereqs = n.after_clauses.map(c => c.alts.join(" | ") + (c.optional ? "?" : "")).join(" & ");
+        footer.innerHTML = `<span>Prerequisites: <code>${escapeHtml(prereqs)}</code></span>`;
+      }
+    }
+  }
+}
+
+/* ==========================================================================
+   Tab 2: Render Spec (Zero-Void Layout)
+   ========================================================================== */
+function renderSpecSections(t) {
+  const container = $("spec-container");
+  container.replaceChildren();
+
+  const body = (t.body || "").trim();
+  if (!body) {
+    container.innerHTML = `<div class="spec-section-body" style="color:var(--muted);">(empty body)</div>`;
+    return;
+  }
+
+  // Parse Markdown sections by ## headings cleanly
+  const sections = [];
+  const lines = body.split("\n");
+  let curTitle = "Overview", curLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (curLines.length) sections.push({ title: curTitle, content: curLines.join("\n") });
+      curTitle = line.slice(3).trim();
+      curLines = [];
+    } else {
+      curLines.push(line);
+    }
+  }
+  if (curLines.length) sections.push({ title: curTitle, content: curLines.join("\n") });
+
+  for (const sec of sections) {
+    const box = add(container, "div", "spec-section");
+    const sHead = add(box, "div", "spec-section-head");
+    sHead.textContent = sec.title;
+
+    if (sec.title.toLowerCase().includes("prove")) {
+      const copyBtn = add(sHead, "button", "btn-action", "📋 Copy Command");
+      copyBtn.type = "button";
+      copyBtn.onclick = () => {
+        const cmdMatch = sec.content.match(/```(?:bash|sh|powershell)?\s*([\s\S]*?)```/);
+        const textToCopy = cmdMatch ? cmdMatch[1].trim() : sec.content.trim();
+        copyText(textToCopy, copyBtn);
+      };
+    }
+
+    const sBody = add(box, "div", "spec-section-body");
+    sBody.innerHTML = formatMarkdownContent(sec.content);
+  }
+}
+
+function formatMarkdownContent(text) {
+  const clean = text.trim();
+  let html = "";
+  const lines = clean.split("\n");
+  let inCode = false, codeLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCode) {
+        html += `<pre class="code-box"><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
+        codeLines = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+    if (!line.trim()) continue;
+
+    // Checklist item
+    const mTodo = line.match(/^(\s*)-\s*\[([ xX-])\]\s*(.*)$/);
+    if (mTodo) {
+      const isDone = mTodo[2].toLowerCase() === "x";
+      const isSkip = mTodo[2] === "-";
+      let tText = escapeHtml(mTodo[3]).replace(/`([^`]+)`/g, "<code>$1</code>");
+      tText = tText.replace(/\[START\]/g, '<span class="badge-start">[START]</span>');
+      tText = tText.replace(/\[ACCEPTANCE:MANDATORY\]/g, '<span class="badge-acc-mandatory">[ACCEPTANCE:MANDATORY]</span>');
+      tText = tText.replace(/\[ACCEPTANCE:OPTIONAL\]/g, '<span class="badge-acc-optional">[ACCEPTANCE:OPTIONAL]</span>');
+      tText = tText.replace(/\[lane:([^\]]+)\]/g, '<span class="badge-lane">[lane:$1]</span>');
+      tText = tText.replace(/\[after:([^\]]+)\]/g, '<span class="badge-after">[after:$1]</span>');
+      html += `<div style="display:flex;gap:6px;margin:3px 0;align-items:baseline;${isDone ? "color:var(--good);font-weight:600;" : (isSkip ? "text-decoration:line-through;opacity:0.6;" : "")}">
+        <span>${isDone ? "☑" : (isSkip ? "⊝" : "☐")}</span>
+        <span>${tText}</span>
+      </div>`;
+      continue;
+    }
+
+    // Bullet item
+    const mBullet = line.match(/^(\s*)-\s*(.*)$/);
+    if (mBullet) {
+      html += `<div style="margin:2px 0 2px 10px;">• ${escapeHtml(mBullet[2]).replace(/`([^`]+)`/g, "<code>$1</code>")}</div>`;
+      continue;
+    }
+
+    html += `<p>${escapeHtml(line).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>`;
+  }
+  return html;
+}
+
+/* ==========================================================================
+   Tab 3: Execution Log Timeline
+   ========================================================================== */
+function renderTimeline(t) {
+  const container = $("timeline-container");
+  container.replaceChildren();
+
+  const entries = Object.entries(t.execution_log || {});
+  if (!entries.length) {
+    container.innerHTML = `<div class="spec-section-body" style="color:var(--muted);text-align:center;padding:24px;">No process execution proofs recorded yet.</div>`;
+    return;
+  }
+
+  for (const [nid, records] of entries) {
+    for (const rec of records) {
+      const item = add(container, "div", "timeline-item " + (rec.kind?.toLowerCase() || "done"));
+      const head = add(item, "div", "timeline-head");
+      add(head, "span", "timeline-ts", rec.timestamp || "recorded");
+      add(head, "span", "timeline-nid", `Checkpoint ${nid}`);
+      const kindBadge = add(head, "span", "timeline-kind " + (rec.kind?.toLowerCase() || "done"), rec.kind || "DONE");
+      add(item, "div", "timeline-proof", rec.detail || "(no detail)");
+    }
+  }
+}
+
+/* ==========================================================================
+   Tab 4: Files & Attachments Tab
+   ========================================================================== */
+function renderFilesTab(t) {
+  const container = $("files-container");
+  container.replaceChildren();
+
+  // Files Section
+  const fBox = add(container, "div", "spec-section");
+  const fHead = add(fBox, "div", "spec-section-head");
+  fHead.innerHTML = `<span>📁 Tracked Files (${t.files?.length || 0})</span>`;
+  const fBody = add(fBox, "div", "spec-section-body");
+  if (!t.files || !t.files.length) {
+    fBody.textContent = "No files tracked on this ticket.";
+  } else {
+    for (const f of t.files) {
+      const fRow = add(fBody, "div", "spec-section", "");
+      fRow.style.margin = "4px 0";
+      fRow.style.display = "flex";
+      fRow.style.justifyContent = "space-between";
+      fRow.style.alignItems = "center";
+      fRow.style.padding = "6px 10px";
+      add(fRow, "span", "", "📄 " + f);
+      const cBtn = add(fRow, "button", "btn-action", "📋 Copy");
+      cBtn.type = "button";
+      cBtn.onclick = () => copyText(f, cBtn);
+    }
+  }
+
+  // Attachments Section
+  const aBox = add(container, "div", "spec-section");
+  const aHead = add(aBox, "div", "spec-section-head");
+  aHead.innerHTML = `<span>📎 Safe Attachments (${t.attachments?.length || 0})</span>`;
+  const aBody = add(aBox, "div", "spec-section-body");
+  if (!t.attachments || !t.attachments.length) {
+    aBody.textContent = "No attachments registered.";
+  } else {
+    for (const a of t.attachments) {
+      const aRow = add(aBody, "div", "spec-section");
+      aRow.style.padding = "8px 10px";
+      add(aRow, "div", "", `📎 <b>${escapeHtml(a.name || a.path)}</b>`);
+      if (a.desc) add(aRow, "div", "", a.desc).style.color = "var(--muted)";
+    }
+  }
+}
+
+/* ==========================================================================
+   Tab 5: Living Architecture Reader
+   ========================================================================== */
+function renderLivingArchitecture(t) {
+  const container = $("charter-container");
+  container.replaceChildren();
+
+  const parts = t.reference.split("/");
+  const projSlug = parts[0], epicSlug = parts[1];
+  const proj = (currentBoardData?.board?.projects || []).find(p => p.slug === projSlug);
+  const epic = proj?.epics?.find(e => e.slug === epicSlug);
+
+  // Epic Spec
+  const eBox = add(container, "div", "charter-box");
+  add(eBox, "h3", "charter-title", `📖 Epic Specification: ${epicSlug} (epic.md)`);
+  add(eBox, "div", "", epic?.body ? formatMarkdownContent(epic.body) : "(No epic.md written yet)");
+
+  // Project Charter
+  const pBox = add(container, "div", "charter-box");
+  add(pBox, "h3", "charter-title", `🏛 Project Charter: ${projSlug} (project.md)`);
+  add(pBox, "div", "", proj?.body ? formatMarkdownContent(proj.body) : "(No project.md written yet)");
+}
+
+/* ==========================================================================
+   Tab Navigation & Drawer Controls
+   ========================================================================== */
+$("drawer-tabs").onclick = event => {
+  const btn = event.target.closest(".tab-btn");
+  if (!btn) return;
+  for (const b of $("drawer-tabs").querySelectorAll(".tab-btn")) b.classList.remove("active");
+  for (const c of document.querySelectorAll(".tab-content")) c.classList.remove("active");
+  btn.classList.add("active");
+  const tabId = btn.dataset.tab;
+  const target = $("tab-" + tabId);
+  if (target) target.classList.add("active");
+};
+
+$("btn-close-drawer").onclick = closeDrawer;
+$("btn-copy-ref").onclick = () => {
+  if (currentTicketRef) copyText(currentTicketRef, $("btn-copy-ref"));
+};
+
+let isFullscreen = false;
+$("btn-expand").onclick = () => {
+  isFullscreen = !isFullscreen;
+  $("drawer").classList.toggle("fullscreen", isFullscreen);
+  $("btn-expand").textContent = isFullscreen ? "🗗 Restore" : "⛶ Expand";
+};
+
+// Resizable Drawer Drag
+let isDragging = false, startY = 0, startH = 400;
+$("drawer-resizer").onmousedown = e => {
+  isDragging = true;
+  startY = e.clientY;
+  startH = $("drawer").offsetHeight;
+  $("drawer-resizer").classList.add("active");
+  document.body.style.userSelect = "none";
+};
+window.onmousemove = e => {
+  if (!isDragging) return;
+  const delta = startY - e.clientY;
+  const newH = Math.max(220, Math.min(window.innerHeight * 0.9, startH + delta));
+  document.documentElement.style.setProperty("--drawer-height", newH + "px");
+};
+window.onmouseup = () => {
+  if (isDragging) {
+    isDragging = false;
+    $("drawer-resizer").classList.remove("active");
+    document.body.style.userSelect = "";
+  }
+};
+
+/* ==========================================================================
+   Filter & Search Helpers
+   ========================================================================== */
+function getFilterValues() {
+  return {
+    q: $("f-q").value.trim().toLowerCase(),
+    project: $("f-project").value,
+    epic: $("f-epic").value,
+    status: $("f-status").value,
+    hidedone: $("f-hidedone").checked
+  };
+}
+
+function matchesFilter(t, pSlug, eSlug, f) {
+  if (f.hidedone && t.status === "done") return false;
+  if (f.status && t.status !== f.status) return false;
+  if (f.project && pSlug !== f.project) return false;
+  if (f.epic && (pSlug + "/" + eSlug) !== f.epic) return false;
+  if (f.q) {
+    const hay = `${t.reference} ${t.title} ${t.note} ${t.owner?.agent || ""} ${(t.files || []).join(" ")}`.toLowerCase();
+    if (!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+
+function buildFilterOptions(board) {
+  const pSelect = $("f-project"), eSelect = $("f-epic"), sSelect = $("f-status");
+  if (pSelect.children.length === 0) {
+    pSelect.innerHTML = `<option value="">project: all</option>`;
+    for (const p of board.projects || []) {
+      add(pSelect, "option", "", p.name || p.slug).value = p.slug;
+    }
+  }
+  if (eSelect.children.length === 0) {
+    eSelect.innerHTML = `<option value="">epic: all</option>`;
+    for (const p of board.projects || []) {
+      for (const e of p.epics || []) {
+        add(eSelect, "option", "", `${p.slug}/${e.slug}`).value = `${p.slug}/${e.slug}`;
+      }
+    }
+  }
+  if (sSelect.children.length === 0) {
+    sSelect.innerHTML = `<option value="">status: all</option>`;
+    for (const st of statuses) {
+      add(sSelect, "option", "", st).value = st;
+    }
+  }
+}
+
+$("f-q").oninput = () => render(currentBoardData);
+$("f-project").onchange = () => render(currentBoardData);
+$("f-epic").onchange = () => render(currentBoardData);
+$("f-status").onchange = () => render(currentBoardData);
+$("f-hidedone").onchange = () => render(currentBoardData);
+
+/* ==========================================================================
+   Keyboard Shortcuts & Toolbar Actions
+   ========================================================================== */
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeDrawer();
+  if (e.key === "/" && document.activeElement !== $("f-q")) {
+    e.preventDefault();
+    $("f-q").focus();
+  }
+  if (e.key === "t" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
+    toggleTheme();
   }
 });
 
-const toolbar = document.querySelector(".top");
-const refreshButton = add(toolbar, "button", "filter", "Refresh");
-refreshButton.type = "button";
-refreshButton.onclick = refresh;
-
-const themeButton = add(toolbar, "button", "filter", "Theme");
-themeButton.type = "button";
-themeButton.onclick = () => {
-  const current = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  const next = current === "dark" ? "light" : "dark";
+function toggleTheme() {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
-  store("kanban-theme", next);
-};
-const savedTheme = store("kanban-theme");
-if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+  localStorage.setItem("kanban-theme", next);
+}
+const savedTheme = localStorage.getItem("kanban-theme");
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
 
+$("btn-theme").onclick = toggleTheme;
+$("btn-refresh").onclick = refresh;
+
+/* ==========================================================================
+   Live SSE Transport & Refresh
+   ========================================================================== */
+let sseSource = null;
+async function refresh() {
+  try {
+    const res = await fetch("/api/board", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    render(data);
+    $("conn-pill").classList.add("live");
+    $("conn-text").textContent = "live";
+  } catch(e) {
+    if (window.__INITIAL_DATA__) render(window.__INITIAL_DATA__);
+    $("conn-pill").classList.remove("live");
+    $("conn-text").textContent = "offline";
+  }
+}
+
+function initSSE() {
+  if (sseSource) sseSource.close();
+  try {
+    sseSource = new EventSource("/events");
+    sseSource.onopen = () => {
+      $("conn-pill").classList.add("live");
+      $("conn-text").textContent = "live (SSE)";
+    };
+    sseSource.onerror = () => {
+      $("conn-pill").classList.remove("live");
+      $("conn-text").textContent = "polling";
+    };
+    sseSource.onmessage = () => refresh();
+  } catch(e) {
+    // Fallback to debounced polling
+    setInterval(refresh, 5000);
+  }
+}
+
+// Initial Bootstrap
+if (window.__INITIAL_DATA__) {
+  render(window.__INITIAL_DATA__);
+}
 refresh();
-setLive(true);
+initSSE();
 </script>
 </body>
 </html>
