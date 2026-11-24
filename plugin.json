@@ -1,7 +1,7 @@
 {
   "name": "kanban-board",
-  "version": "2.2.0",
-  "description": "Kanban task tracking with native MCP tools, view-only web app, and quality-gated QA for Antigravity agents.",
+  "version": "2.3.0",
+  "description": "Kanban task tracking with dual-mode MCP isolation, PreToolUse hooks, and independent kb-qa gating.",
   "logo": "assets/logo.svg",
   "author": {
     "name": "kanbanBoard"

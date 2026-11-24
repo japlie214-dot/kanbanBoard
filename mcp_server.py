@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """mcp_server.py — Zero-dependency native Model Context Protocol (MCP) server for kanban-board.
 
-Streamlined 7-Tool Harmonized Arsenal:
-  1. kanban_board   - Discovery, listing, and board health linting (view="overview"|"list"|"lint")
-  2. kanban_ticket  - Create or inspect tickets (create if title given, show if title omitted)
-  3. kanban_move    - Status transitions with atomic claim, 60m lease, force takeover, & Anti-Laziness Gates
-  4. kanban_update  - In-flight progress: check Todo Tree nodes, declare files, log notes, attach/detach files
-  5. kanban_doc     - Read or write project/epic architectural documentation (docs: [])
-  6. kanban_view    - Launch/render interactive view-only web dashboard widget
-  7. kanban_qa      - Restricted 3-tier QA protocol for kb-qa (action="start"|"approve")
+Dual-Mode Capability Isolation:
+  --mode work (default): Exposes ONLY the 6 worker tools (kanban_qa is physically absent).
+  --mode qa:             Exposes ONLY kanban_qa plus read-only kanban_board and kanban_ticket(show).
+
+7-Tool Harmonized Arsenal:
+1. kanban_board  - Discovery, listing, and board health linting (view="overview"|"init"|"list"|"lint")
+2. kanban_ticket - Create, inspect, scaffold, or edit tickets
+3. kanban_move   - Status transitions with atomic claim, 60m lease, force takeover, & Anti-Laziness Gates
+4. kanban_update - In-flight progress: check Todo Tree nodes, declare files, log notes, attach/detach files
+5. kanban_doc    - Read or write project/epic architectural documentation (docs: [])
+6. kanban_view   - Launch/render interactive view-only web dashboard widget (detached subprocess)
+7. kanban_qa     - Restricted 4-tier QA protocol exclusively for kb-qa (--mode qa only)
 """
 from __future__ import annotations
 
 import json
 import os
+import socket
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -23,8 +29,23 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "2.1.0"
-_VIEWER_STARTED = False
+SERVER_VERSION = "2.3.0"
+_VIEWER_PORT: Optional[int] = None
+
+WORK_TOOL_NAMES = frozenset({
+    "kanban_board",
+    "kanban_ticket",
+    "kanban_move",
+    "kanban_update",
+    "kanban_doc",
+    "kanban_view",
+})
+
+QA_TOOL_NAMES = frozenset({
+    "kanban_board",
+    "kanban_ticket",
+    "kanban_qa",
+})
 
 TOOLS = [
     {
@@ -54,7 +75,7 @@ TOOLS = [
                 "action": {
                     "type": "string",
                     "enum": ["show", "create", "edit", "scaffold"],
-                    "description": "Explicit mode (optional; inferred from title/edit fields if omitted)"
+                    "description": "Explicit mode (recommended; inferred if unambiguous)"
                 },
                 "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
                 "project": {"type": "string", "description": "Project slug (when creating without explicit ref)"},
@@ -75,7 +96,7 @@ TOOLS = [
     },
     {
         "name": "kanban_move",
-        "description": "Move a ticket between backlog, in-progress, verify, and blocked. Moving to 'in-progress' atomically claims ownership with a 60-minute lease. Moving to 'verify' enforces the 5 Anti-Laziness Gates (Git modifications, unbroken DAG path, Prove command). NOTE: 'done' is strictly forbidden here (only kb-qa approves to done via kanban_qa).",
+        "description": "Move a ticket between backlog, in-progress, verify, and blocked. Moving to 'in-progress' atomically claims ownership with a 60-minute lease. Moving to 'verify' enforces the 5 Anti-Laziness Gates (Git modifications, unbroken DAG path, Prove command). NOTE: 'done' is strictly forbidden here (only kb-qa approves to done via kanban-qa MCP).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -90,7 +111,8 @@ TOOLS = [
                 "session_id": {"type": "string", "description": "Optional session/conversation ID"},
                 "lease_minutes": {"type": "integer", "description": "Lease duration in minutes (default: 60)"},
                 "force": {"type": "boolean", "description": "Force takeover if ticket is held by another agent"},
-                "reason": {"type": "string", "description": "Reason for forceful takeover"}
+                "reason": {"type": "string", "description": "Reason for forceful takeover"},
+                "workspace": {"type": "string", "description": "Explicit target repository root path for Gate 2 git status check (recommended for centralized multi-project boards)"}
             },
             "required": ["ref", "status"]
         }
@@ -148,7 +170,7 @@ TOOLS = [
             "properties": {
                 "open_browser": {
                     "type": "boolean",
-                    "description": "If true, also launches the local loopback browser viewer on localhost:7890+",
+                    "description": "If true, also launches the local loopback browser viewer on an available port (default 7890+)",
                     "default": True
                 }
             }
@@ -156,7 +178,7 @@ TOOLS = [
     },
     {
         "name": "kanban_qa",
-        "description": "RESTRICTED: Exclusively for kb-qa subagent to execute the 4-tier Process + Result QA protocol. 'start' fetches ticket spec + execution log + secret qa_nonce. 'approve' validates process & checkpoint audit + diff + living docs + Horse vs. Zebra evidence and certifies to 'done'. 'reject' burns nonce and returns ticket to 'in-progress' with failure reason.",
+        "description": "RESTRICTED (--mode qa ONLY): Exclusively for kb-qa subagent to execute the 4-tier Process + Result QA protocol. 'start' fetches ticket spec + execution log + secret qa_nonce. 'approve' validates process & checkpoint audit + diff + living docs + Horse vs. Zebra evidence, signs with HMAC, and certifies to 'done'. 'reject' burns nonce and returns ticket to 'in-progress' with failure reason.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -164,7 +186,8 @@ TOOLS = [
                 "ref": {"type": "string", "description": "Ticket ref in 'verify' state"},
                 "qa_nonce": {"type": "string", "description": "Ephemeral cryptographic nonce (required for approve/reject)"},
                 "evidence_path": {"type": "string", "description": "Path to QA evidence markdown report (required for approve, optional for reject)"},
-                "note": {"type": "string", "description": "Certification summary (approve) or failure reason (reject)"}
+                "note": {"type": "string", "description": "Certification summary (approve) or failure reason (reject)"},
+                "workspace": {"type": "string", "description": "Optional target repository root for resolving relative evidence_path"}
             },
             "required": ["action", "ref"]
         }
@@ -179,6 +202,19 @@ RESOURCES = [
         "mimeType": "text/html"
     }
 ]
+
+
+def tools_for_mode(mode: str) -> list[dict]:
+    allowed = QA_TOOL_NAMES if mode == "qa" else WORK_TOOL_NAMES
+    return [t for t in TOOLS if t["name"] in allowed]
+
+
+def _pick_free_port(preferred: int = 7890, max_tries: int = 20) -> int:
+    for port in range(preferred, preferred + max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    return preferred
 
 
 def send_response(response: dict):
@@ -222,7 +258,17 @@ def send_tool_result(req_id: Any, text: str, is_error: bool = False, extra_resul
     })
 
 
-def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
+def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str = "work"):
+    allowed = QA_TOOL_NAMES if mode == "qa" else WORK_TOOL_NAMES
+    if name not in allowed:
+        send_tool_result(
+            req_id,
+            f"PermissionError: Tool '{name}' is not available in MCP server mode '{mode}'. "
+            "Worker agents must use '--mode work'; only the isolated kb-qa subagent may use '--mode qa'.",
+            is_error=True,
+        )
+        return
+
     try:
         # Tool 1: kanban_board
         if name == "kanban_board":
@@ -230,6 +276,10 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             project = args.get("project")
             epic = args.get("epic")
             status = args.get("status")
+
+            if mode == "qa" and view == "init":
+                send_tool_result(req_id, "PermissionError: 'init' is disabled in read-only QA mode.", is_error=True)
+                return
 
             if view == "init":
                 proj = project or "default"
@@ -278,13 +328,27 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 if args.get(k) is not None
             }
 
+            if mode == "qa" and action not in {"", "show"}:
+                send_tool_result(req_id, "PermissionError: Only action='show' is permitted in QA mode.", is_error=True)
+                return
+
             if action == "scaffold":
                 dag_template = kb.api_scaffold_dag(pattern)
                 send_tool_result(req_id, dag_template)
                 return
 
             if not action:
-                if title:
+                if mode == "qa":
+                    action = "show"
+                elif title and any(k in edit_fields for k in ("outcome", "scope", "prove", "body")):
+                    send_tool_result(
+                        req_id,
+                        "Error: Ambiguous kanban_ticket call — both 'title' and edit fields were supplied without 'action'. "
+                        "Specify action='create' or action='edit' explicitly.",
+                        is_error=True,
+                    )
+                    return
+                elif title:
                     action = "create"
                 elif edit_fields:
                     action = "edit"
@@ -329,6 +393,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             lease_minutes = args.get("lease_minutes", 60)
             force = args.get("force", False)
             reason = args.get("reason", "")
+            workspace = args.get("workspace")
 
             if status == "done":
                 send_tool_result(
@@ -350,6 +415,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 force=force,
                 caller_is_qa=False,
                 reason=reason,
+                workspace=workspace,
             )
             text = f"Moved {res['ref']}: {res['from']} -> {res['to']}"
             if res.get("owner"):
@@ -421,7 +487,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
 
         # Tool 6: kanban_view
         elif name == "kanban_view":
-            global _VIEWER_STARTED
+            global _VIEWER_PORT
             open_browser = args.get("open_browser", True)
             tickets = kb.api_list(board)
             counts = {}
@@ -431,19 +497,27 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
             text = f"Kanban Board Overview ({len(tickets)} tickets):\n" + " | ".join(summary_parts) + "\n\n"
             text += "Interactive view-only UI rendered via resource ui://kanban/board."
             if open_browser:
-                if not _VIEWER_STARTED:
-                    import viewer, threading
-                    _VIEWER_STARTED = True
-                    threading.Thread(target=lambda: viewer.run_server(board, port=7890, open_browser=True), daemon=True).start()
-                    text += "\nLaunched local loopback viewer in browser (default port 7890)."
+                if _VIEWER_PORT is None:
+                    port = _pick_free_port(7890)
+                    kb_script = str(Path(__file__).parent.resolve() / "kb.py")
+                    subprocess.Popen(
+                        [sys.executable, kb_script, "--board", str(board), "serve", "--port", str(port)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=(os.name != "nt"),
+                    )
+                    _VIEWER_PORT = port
+                    text += f"\nLaunched isolated local loopback viewer on http://127.0.0.1:{port}."
                 else:
-                    text += "\nLocal loopback viewer already running on http://127.0.0.1:7890."
+                    text += f"\nLocal loopback viewer already running on http://127.0.0.1:{_VIEWER_PORT}."
             send_tool_result(req_id, text, extra_result={"_meta": {"ui": {"resourceUri": "ui://kanban/board"}}})
 
-        # Tool 7: kanban_qa
+        # Tool 7: kanban_qa (--mode qa ONLY)
         elif name == "kanban_qa":
             action = args["action"].lower()
             ref = args["ref"]
+            workspace = args.get("workspace")
             if action == "start":
                 res = kb.api_qa_start(ref, board)
                 text = json.dumps(res, indent=2)
@@ -455,8 +529,20 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path):
                 if not qa_nonce or not evidence_path or not note:
                     send_tool_result(req_id, "Error: action='approve' requires 'qa_nonce', 'evidence_path', and 'note'.", is_error=True)
                     return
-                res = kb.api_qa_approve(ref, qa_nonce, evidence_path, note, board)
-                text = f"SUCCESS: {res['ref']} verified and transitioned {res['from']} -> {res['to']} [CERTIFIED BY QA]\nEvidence: {res['evidence']}\nAcceptance summary: {res['note']}"
+                res = kb.api_qa_approve(
+                    ref,
+                    qa_nonce,
+                    evidence_path,
+                    note,
+                    board,
+                    workspace=workspace,
+                )
+                sig_note = f"\nHMAC Signature: {res['qa_signature'][:16]}..." if res.get("qa_signature") else ""
+                text = (
+                    f"SUCCESS: {res['ref']} verified and transitioned {res['from']} -> {res['to']} [CERTIFIED BY QA]\n"
+                    f"Evidence: {res['evidence']}{sig_note}\n"
+                    f"Acceptance summary: {res['note']}"
+                )
                 send_tool_result(req_id, text)
             elif action == "reject":
                 qa_nonce = args.get("qa_nonce")
@@ -482,9 +568,17 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Kanban MCP Server")
     parser.add_argument("--board-root", default=None, help="Explicit path to board/ directory")
+    parser.add_argument(
+        "--mode",
+        choices=["work", "qa"],
+        default="work",
+        help="Server capability mode: 'work' (default, excludes kanban_qa) or 'qa' (kb-qa subagent only)",
+    )
     args, unknown = parser.parse_known_args()
 
     board = Path(args.board_root).resolve() if args.board_root else kb.board_root()
+    mode = args.mode
+    server_name = f"{SERVER_NAME}-qa" if mode == "qa" else SERVER_NAME
 
     for line in sys.stdin:
         line = line.strip()
@@ -507,7 +601,7 @@ def main():
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "serverInfo": {
-                        "name": SERVER_NAME,
+                        "name": server_name,
                         "version": SERVER_VERSION
                     },
                     "capabilities": {
@@ -525,7 +619,7 @@ def main():
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "tools": TOOLS
+                    "tools": tools_for_mode(mode)
                 }
             })
 
@@ -534,7 +628,7 @@ def main():
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "resources": RESOURCES
+                    "resources": RESOURCES if mode == "work" else []
                 }
             })
 
@@ -565,7 +659,7 @@ def main():
         elif method == "tools/call":
             name = params.get("name")
             tool_args = params.get("arguments", {})
-            handle_tool_call(req_id, name, tool_args, board)
+            handle_tool_call(req_id, name, tool_args, board, mode=mode)
 
         elif method == "ping":
             send_response({

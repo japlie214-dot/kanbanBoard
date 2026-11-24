@@ -17,6 +17,11 @@ CORE_FILES = [
     "plugin.json",
     "mcp_config.json",
     ".mcp.json",
+    "hooks.json",
+    "hooks/guard.py",
+    "hooks/hooks.json",
+    "scripts/install_qa_lock.py",
+    "scripts/pre_commit_verify_done.py",
     "README.md",
     "CLAUDE.md",
     "assets/logo.svg",
@@ -36,6 +41,7 @@ CORE_FILES = [
     "apps/Board.bat",
     "resources/board.html",
     "tests/test_kanban.py",
+    "tests/test_qa_lock.py",
 ]
 
 def collect_all_files():

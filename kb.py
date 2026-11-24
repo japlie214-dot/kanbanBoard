@@ -19,6 +19,7 @@ import argparse
 import contextlib
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -112,8 +113,18 @@ def board_root() -> Path:
     return user_board
 
 
-def workspace_root() -> Path:
-    """Resolve the active application workspace directory (for git status checks)."""
+def workspace_root(explicit_workspace: Optional[str] = None) -> Path:
+    """Resolve the active application workspace directory (for git status checks).
+
+    Priority:
+      1. explicit_workspace argument (passed by MCP client for multi-repo setups)
+      2. KANBAN_WORKSPACE_ROOT environment variable
+      3. Nearest parent of CWD containing .git (excluding plugin-internal paths)
+      4. CWD fallback
+    """
+    if explicit_workspace:
+        return Path(explicit_workspace).resolve()
+
     env_ws = os.environ.get("KANBAN_WORKSPACE_ROOT")
     if env_ws:
         return Path(env_ws).resolve()
@@ -178,6 +189,47 @@ def read_qa_nonce(path: Path, board: Path) -> Optional[str]:
     if nonce_file.exists():
         return nonce_file.read_text(encoding="utf-8").strip()
     return None
+
+
+def qa_secret_path() -> Path:
+    env_file = os.environ.get("KANBAN_QA_SECRET_FILE")
+    if env_file:
+        return Path(env_file).expanduser().resolve()
+    return Path.home() / ".kanban" / ".qa_secret"
+
+
+def load_qa_secret() -> Optional[str]:
+    """Load the HMAC signing secret available exclusively to the kanban-qa MCP server."""
+    env_secret = os.environ.get("KANBAN_QA_SECRET", "").strip()
+    if env_secret:
+        return env_secret
+    sec_file = qa_secret_path()
+    if sec_file.is_file():
+        try:
+            val = sec_file.read_text(encoding="utf-8").strip()
+            return val or None
+        except OSError:
+            return None
+    return None
+
+
+def compute_qa_signature(ref: str, evidence_sha256: str, secret: str) -> str:
+    payload = f"{ref}:done:{evidence_sha256}".encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
+
+def verify_qa_signature(ref: str, meta: dict, secret: Optional[str] = None) -> tuple[bool, str]:
+    sig = str(meta.get("qa_signature") or "").strip()
+    ev_hash = str(meta.get("qa_evidence_sha256") or "").strip()
+    if not sig or not ev_hash:
+        return False, "missing qa_signature or qa_evidence_sha256"
+    sec = secret if secret is not None else load_qa_secret()
+    if not sec:
+        return False, "QA signing secret not configured"
+    expected = compute_qa_signature(ref, ev_hash, sec)
+    if not hmac.compare_digest(sig, expected):
+        return False, "invalid qa_signature (possible manual tamper of status: done)"
+    return True, "ok"
 
 
 def burn_qa_nonce(path: Path, board: Path):
@@ -1064,6 +1116,9 @@ def api_move(
     force: bool = False,
     caller_is_qa: bool = False,
     reason: str = "",
+    workspace: Optional[str] = None,
+    qa_signature: Optional[str] = None,
+    qa_evidence_sha256: Optional[str] = None,
 ) -> dict:
     new_status = new_status.lower()
     if new_status not in VALID_STATUSES:
@@ -1152,17 +1207,16 @@ def api_move(
             if not is_valid:
                 raise ValueError(f"Cannot move to 'verify': {path_msg}")
 
-            # Gate 2: Smart Git Physical Verification
-            ws_root = workspace_root()
+            # Gate 2: Smart Git Physical Verification (cannot be bypassed by self-declared files)
+            ws_root = workspace_root(workspace)
             git_info = inspect_git_status(ws_root)
             if git_info.get("has_git"):
                 uncommitted = git_info.get("uncommitted", [])
-                # If git has 0 modifications and ticket has 0 files, block
                 declared_files = meta.get("files") or []
-                if not uncommitted and not declared_files:
+                if not uncommitted:
                     raise ValueError(
-                        "Cannot move to 'verify': No file modifications detected in git. "
-                        "You cannot claim work is done without writing code or tests."
+                        f"Cannot move to 'verify': No uncommitted file modifications detected in git ({ws_root}). "
+                        "Pass workspace=<repo_path> if editing a different repo, and do not commit before kb-qa approval."
                     )
 
                 # Smart auto-population if exactly 1 ticket in-progress
@@ -1194,6 +1248,11 @@ def api_move(
         meta["since"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         if note.strip():
             meta["note"] = note.strip()
+        if new_status == "done":
+            if qa_evidence_sha256:
+                meta["qa_evidence_sha256"] = qa_evidence_sha256
+            if qa_signature:
+                meta["qa_signature"] = qa_signature
 
         path.write_text(render_frontmatter(meta, body), encoding="utf-8")
 
@@ -1444,8 +1503,11 @@ def api_ticket_edit(
     with board_lock(board):
         text = path.read_text(encoding="utf-8")
         meta, cur_body = parse_frontmatter(text)
-        if meta.get("status") == "done":
-            raise PermissionError("Cannot edit a 'done' ticket.")
+        if meta.get("status") in {"verify", "done"}:
+            raise PermissionError(
+                f"Cannot edit a '{meta.get('status')}' ticket. "
+                "Tickets in 'verify' are frozen for kb-qa; reject back to 'in-progress' first."
+            )
 
         if body is not None:
             cur_body = "\n" + body.strip() + "\n"
@@ -1692,8 +1754,16 @@ def api_qa_start(ref: str, board: Path) -> dict:
     }
 
 
-def api_qa_approve(ref: str, nonce: str, evidence_path: str, note: str, board: Path) -> dict:
-    """Gate 5: Independent QA Approval with Process & Result Evidence Audit."""
+def api_qa_approve(
+    ref: str,
+    nonce: str,
+    evidence_path: str,
+    note: str,
+    board: Path,
+    workspace: Optional[str] = None,
+    require_signature: Optional[bool] = None,
+) -> dict:
+    """Gate 5: Independent QA Approval with Process & Result Evidence Audit + HMAC Signature."""
     path = resolve_ref(ref, board)
     if not path.exists():
         raise FileNotFoundError(f"Ticket not found: {ref}")
@@ -1705,7 +1775,7 @@ def api_qa_approve(ref: str, nonce: str, evidence_path: str, note: str, board: P
     if not stored_nonce or stored_nonce.strip() != nonce.strip():
         raise PermissionError("Invalid or expired qa_nonce. Anti-cheat check failed.")
 
-    ws_root = workspace_root()
+    ws_root = workspace_root(workspace)
     ev_p = Path(evidence_path)
     if not ev_p.is_absolute():
         ev_p = ws_root / ev_p
@@ -1744,11 +1814,30 @@ def api_qa_approve(ref: str, nonce: str, evidence_path: str, note: str, board: P
         n["id"] for n in nodes
         if n["is_acceptance"] and n["acceptance_kind"] == "MANDATORY" and n["status"] != "skipped"
     ]
-    uncited = [nid for nid in active_mandatory_ids if nid not in ev_text]
+    uncited = [
+        nid for nid in active_mandatory_ids
+        if not re.search(rf"(?<![A-Za-z0-9_]){re.escape(nid)}(?![A-Za-z0-9_])", ev_text)
+    ]
     if uncited:
         raise ValueError(
             f"QA Evidence report must explicitly verify all mandatory acceptance checkpoint(s): {', '.join(uncited)}."
         )
+
+    # Compute cryptographic HMAC signature over ref + done + evidence digest
+    evidence_sha256 = hashlib.sha256(ev_text.encode("utf-8")).hexdigest()
+    fref = full_ref(path, board)
+    secret = load_qa_secret()
+    enforce_sig = (
+        require_signature
+        if require_signature is not None
+        else os.environ.get("KANBAN_REQUIRE_QA_SIGNATURE", "0").strip() in {"1", "true", "yes"}
+    )
+    if enforce_sig and not secret:
+        raise PermissionError(
+            "QA approval blocked: KANBAN_REQUIRE_QA_SIGNATURE is enabled but no QA signing secret is available. "
+            "Only the isolated kanban-qa MCP server should hold KANBAN_QA_SECRET / ~/.kanban/.qa_secret."
+        )
+    qa_sig = compute_qa_signature(fref, evidence_sha256, secret) if secret else None
 
     # Approve move to done
     res = api_move(
@@ -1756,10 +1845,15 @@ def api_qa_approve(ref: str, nonce: str, evidence_path: str, note: str, board: P
         new_status="done",
         note=note,
         board=board,
-        caller_is_qa=True
+        caller_is_qa=True,
+        qa_signature=qa_sig,
+        qa_evidence_sha256=evidence_sha256,
     )
     burn_qa_nonce(path, board)
     res["evidence"] = str(ev_p)
+    res["evidence_sha256"] = evidence_sha256
+    if qa_sig:
+        res["qa_signature"] = qa_sig
     return res
 
 
@@ -1895,6 +1989,15 @@ def api_lint(board: Path) -> dict:
                     nodes, err = parse_todo_tree(body)
                     if err:
                         warnings.append(f"{ref}: {err}")
+                if st == "done":
+                    secret = load_qa_secret()
+                    if meta.get("qa_signature") or meta.get("qa_evidence_sha256"):
+                        if secret:
+                            ok_sig, sig_msg = verify_qa_signature(ref, meta, secret)
+                            if not ok_sig:
+                                errors.append(f"{ref}: {sig_msg}")
+                    elif os.environ.get("KANBAN_REQUIRE_QA_SIGNATURE", "0").strip() in {"1", "true", "yes"}:
+                        errors.append(f"{ref}: done ticket missing qa_signature")
 
     # Check dependencies
     for ref, deps in ticket_depends.items():
@@ -2044,14 +2147,8 @@ def main():
     p_claim.add_argument("--force", action="store_true")
     p_claim.add_argument("--reason", default="")
 
-    p_qa_start = sub.add_parser("qa-start", help="Initiate QA audit session")
-    p_qa_start.add_argument("ref")
-
-    p_qa_app = sub.add_parser("qa-approve", help="Approve ticket to done")
-    p_qa_app.add_argument("ref")
-    p_qa_app.add_argument("nonce")
-    p_qa_app.add_argument("evidence")
-    p_qa_app.add_argument("-n", "--note", default="Approved by QA")
+    p_vdone = sub.add_parser("verify-done", help="Verify HMAC qa_signature on done tickets (for git pre-commit)")
+    p_vdone.add_argument("--strict", action="store_true", help="Fail if any done ticket lacks qa_signature")
 
     p_show = sub.add_parser("show", help="Show ticket details")
     p_show.add_argument("ref")
@@ -2099,12 +2196,16 @@ def main():
         elif args.command == "claim":
             res = api_claim(args.ref, args.agent, force=args.force, reason=args.reason, board=board)
             print(f"Claimed {res['ref']} for {res['owner']['agent']}")
-        elif args.command == "qa-start":
-            res = api_qa_start(args.ref, board)
-            print(json.dumps(res, indent=2))
-        elif args.command == "qa-approve":
-            res = api_qa_approve(args.ref, args.nonce, args.evidence, args.note, board)
-            print(f"Approved {res['ref']} -> done")
+        elif args.command == "verify-done":
+            if args.strict:
+                os.environ["KANBAN_REQUIRE_QA_SIGNATURE"] = "1"
+            res = api_lint(board)
+            sig_errors = [e for e in res["errors"] if "qa_signature" in e or "qa_evidence_sha256" in e]
+            if sig_errors:
+                for err in sig_errors:
+                    print(f"ERROR: {err}", file=sys.stderr)
+                sys.exit(1)
+            print("verify-done: OK")
         elif args.command == "show":
             res = api_show(args.ref, board)
             print(json.dumps(res, indent=2))

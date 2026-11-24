@@ -6,6 +6,11 @@ You are operating in a workspace that uses the **kanban-board** plugin for struc
 
 Every piece of non-trivial work (feature, bug fix, refactor, investigation) MUST be tracked as a Kanban ticket before you start. **No ticket = no work.**
 
+### The Single Centralized Board Invariant
+- **Strictly Centralized**: All projects (`coom`, `deckanim`, `kanban-system`, `memberberries`, `nightwatch`, `snowball`, etc.) are tracked exclusively in the **Central Kanban Board** (`C:\Projects\kanbanBoard\board` or `~/.kanban/board`).
+- **Zero Repo Pollution**: Application repositories (e.g. `C:\Projects\etoroNightwatch`, `C:\Projects\coom`) must NEVER contain a `board/` directory. If you see an untracked `board/` in `git status` of an application repo, it is an error—do NOT commit it. Delete or ignore it.
+- **Universal Multi-Project Discovery**: The MCP tools automatically resolve to the centralized board regardless of what repository you are editing. Specify `project="<slug>"` (e.g. `project="nightwatch"`) to target the correct project container in the central board.
+
 ## Ticket Lifecycle
 
 ```
@@ -79,8 +84,9 @@ The state engine strictly enforces quality standards in code:
 ---
 
 ## Strict Prohibitions
-1. **Never attempt to mark `done` yourself:** Only `kb-qa` can approve tickets to `done`.
-2. **Never commit or push unless ticket is `done`:** Git commits are prohibited until certified.
-3. **No hand-edits to YAML status:** Always use MCP tools.
-4. **Never skip living documentation:** Update `epic.md`/`project.md` whenever interfaces, dependencies, or contracts change.
-5. **Never bulk-check checkboxes without execution proofs:** Every completed checkpoint must have evidence in `## Execution Log`.
+1. **Never create or commit a `board/` folder in application repositories:** The board is strictly centralized (`C:\Projects\kanbanBoard\board` / `~/.kanban/board`). Application repositories must stay completely clean.
+2. **Never attempt to mark `done` yourself:** Only `kb-qa` can approve tickets to `done`.
+3. **Never commit or push unless ticket is `done`:** Git commits are prohibited until certified.
+4. **No hand-edits to YAML status:** Always use MCP tools.
+5. **Never skip living documentation:** Update `epic.md`/`project.md` whenever interfaces, dependencies, or contracts change.
+6. **Never bulk-check checkboxes without execution proofs:** Every completed checkpoint must have evidence in `## Execution Log`.
