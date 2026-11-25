@@ -348,8 +348,8 @@
       renderLeases();
       renderBoard();
       if (currentTicketRef) openDetail(currentTicketRef);
-    } catch (_) {
-      // Ignore transient network errors
+    } catch (err) {
+      console.error("[kanban] refreshBoard error:", err);
     }
   }
 
