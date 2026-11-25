@@ -22,16 +22,71 @@
 
   function flattenTickets(payload) {
     if (Array.isArray(payload.tickets)) return payload.tickets;
+    const boardObj = payload.board || payload;
+    const projects = boardObj.projects || payload.projects || [];
     const out = [];
-    for (const proj of payload.projects || []) {
+
+    for (const proj of projects) {
+      const projName = proj.slug || proj.name || "";
+      const projDoc = proj.doc || proj.charter || proj.body || "";
+
+      // kb.py stores tickets directly on proj.tickets
+      const tickets = Array.isArray(proj.tickets) ? proj.tickets : [];
+      for (const t of tickets) {
+        const ref = t.ref || t.reference || `${projName}/${t.epic || "core"}/${t.id}`;
+        const ownerObj = typeof t.owner === "object" && t.owner !== null ? t.owner : null;
+        const agent = (ownerObj ? ownerObj.agent : t.owner) || t.agent || "";
+        const leaseExp = (ownerObj ? ownerObj.lease_expires : null) || t.lease_expires || t.lease_until;
+
+        // Find epic doc if available
+        let epicDoc = t.epic_doc || "";
+        if (!epicDoc && Array.isArray(proj.epics)) {
+          const ep = proj.epics.find((e) => e.slug === t.epic || e.name === t.epic);
+          if (ep) epicDoc = ep.doc || ep.spec || ep.body || "";
+        }
+
+        // Compute DAG progress counts
+        const nodes = Array.isArray(t.dag_nodes) ? t.dag_nodes : (Array.isArray(t.nodes) ? t.nodes : []);
+        const totalNodes = t.todo_total ?? nodes.length;
+        const doneNodes = t.todo_done ?? nodes.filter((n) => n.checked || n.status === "done").length;
+
+        out.push({
+          ...t,
+          ref,
+          agent,
+          lease_expires: leaseExp,
+          project: t.project || projName,
+          epic: t.epic || "",
+          project_doc: projDoc,
+          epic_doc: epicDoc,
+          todo_total: totalNodes,
+          todo_done: doneNodes,
+        });
+      }
+
+      // Backward-compatibility: if tickets are nested inside epics
       for (const epic of proj.epics || []) {
         for (const t of epic.tickets || []) {
+          const ref = t.ref || t.reference || `${projName}/${epic.slug || epic.name}/${t.id}`;
+          const ownerObj = typeof t.owner === "object" && t.owner !== null ? t.owner : null;
+          const agent = (ownerObj ? ownerObj.agent : t.owner) || t.agent || "";
+          const leaseExp = (ownerObj ? ownerObj.lease_expires : null) || t.lease_expires || t.lease_until;
+
+          const nodes = Array.isArray(t.dag_nodes) ? t.dag_nodes : (Array.isArray(t.nodes) ? t.nodes : []);
+          const totalNodes = t.todo_total ?? nodes.length;
+          const doneNodes = t.todo_done ?? nodes.filter((n) => n.checked || n.status === "done").length;
+
           out.push({
             ...t,
-            project: t.project || proj.slug || proj.name || "",
+            ref,
+            agent,
+            lease_expires: leaseExp,
+            project: t.project || projName,
             epic: t.epic || epic.slug || epic.name || "",
-            project_doc: proj.doc || proj.charter || "",
-            epic_doc: epic.doc || epic.spec || "",
+            project_doc: projDoc,
+            epic_doc: epic.doc || epic.spec || epic.body || "",
+            todo_total: totalNodes,
+            todo_done: doneNodes,
           });
         }
       }
@@ -281,10 +336,14 @@
       const resp = await fetch("/api/board", { cache: "no-store" });
       if (!resp.ok) return;
       const payload = await resp.json();
+      const boardObj = payload.board || payload;
       boardData = {
         ...payload,
+        board_dir: boardObj.board_dir || payload.board_dir || "board/",
+        projects: boardObj.projects || payload.projects || [],
         tickets: flattenTickets(payload),
       };
+      if ($("board-dir")) $("board-dir").textContent = boardData.board_dir;
       populateFilters();
       renderLeases();
       renderBoard();
