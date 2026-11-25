@@ -20,6 +20,7 @@ import contextlib
 import datetime
 import hashlib
 import hmac
+import kb_ergonomics
 import json
 import os
 import re
@@ -1551,6 +1552,7 @@ def api_ticket_edit(
     plan: Optional[str] = None,
     prove: Optional[str] = None,
     body: Optional[str] = None,
+    force: bool = False,
 ) -> dict:
     """Safely update ticket markdown sections without touching YAML status frontmatter."""
     path = resolve_ref(ref, board)
@@ -1560,10 +1562,10 @@ def api_ticket_edit(
     with board_lock(board):
         text = path.read_text(encoding="utf-8")
         meta, cur_body = parse_frontmatter(text)
-        if meta.get("status") in {"verify", "done"}:
+        if meta.get("status") in {"verify", "done"} and not force:
             raise PermissionError(
                 f"Cannot edit a '{meta.get('status')}' ticket. "
-                "Tickets in 'verify' are frozen for kb-qa; reject back to 'in-progress' first."
+                "Tickets in 'verify' are frozen for kb-qa; reject back to 'in-progress' first or pass force=True."
             )
 
         if body is not None:

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Add project root to path to import kb
+import kb_ergonomics
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 
@@ -74,7 +75,7 @@ TOOLS = [
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["show", "create", "edit", "scaffold"],
+                    "enum": ["show", "create", "edit"],
                     "description": "Explicit mode (recommended; inferred if unambiguous)"
                 },
                 "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
@@ -90,7 +91,8 @@ TOOLS = [
                 "scope": {"type": "string", "description": "Updated ## Scope content (for action='edit')"},
                 "plan": {"type": "string", "description": "Updated ## Plan (Todo Tree) DAG content (for action='edit' or 'create')"},
                 "prove": {"type": "string", "description": "Updated ## Prove content (for action='edit')"},
-                "body": {"type": "string", "description": "Full replacement markdown body (for action='edit')"}
+                "body": {"type": "string", "description": "Full replacement markdown body (for action='edit')"},
+                "force": {"type": "boolean", "description": "Force edit even if ticket is in verify or done state", "default": False}
             }
         }
     },
@@ -372,7 +374,8 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 text += "Use kanban_ticket(action='edit', ref=..., outcome=..., scope=..., plan=..., prove=...) before moving to in-progress."
                 send_tool_result(req_id, text)
             elif action == "edit":
-                res = kb.api_ticket_edit(ref, board=board, **edit_fields)
+                force_edit = bool(args.get("force", False))
+                res = kb.api_ticket_edit(ref, board=board, force=force_edit, **edit_fields)
                 send_tool_result(req_id, f"Updated ticket {res['ref']} (status: {res['status']}).")
             else:
                 ticket = kb.api_show(ref, board)

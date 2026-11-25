@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""hooks/guard.py — Deterministic PreToolUse guard for Claude Code, Claude Desktop, and Antigravity.
+"""hooks/guard.py – Deterministic PreToolUse guard for Claude Code, Claude Desktop, and Antigravity.
 
 Enforces three physical invariants:
-  1. Only the 'kb-qa' subagent may invoke any kanban_qa MCP tool (Claude Code / Desktop).
+  1. Only the 'kb-qa' subagent may invoke any kanban_qa MCP tool (Claude Code / Desktop / Antigravity).
   2. No agent may directly edit/write files inside the Kanban board directory, .qa_nonces, or .qa_secret.
   3. No agent may use shell commands (Bash / run_command) to tamper with board/, .qa_nonces, .qa_secret,
-     or manually launch mcp_server.py --mode qa.
+     launch mcp_server.py --mode qa, call kb.py qa/manual_approve, or spoof human approval on port 7890.
 """
 from __future__ import annotations
 
@@ -25,7 +25,9 @@ PROTECTED_PATH_PATTERNS = [
 
 PROTECTED_CMD_PATTERNS = [
     (re.compile(r"mcp_server\.py[^\n]*--mode\s+qa", re.I), "Direct invocation of mcp_server.py --mode qa via shell is forbidden."),
-    (re.compile(r"\bkb\.py\b[^\n]*\bqa[-_]?(?:start|approve|reject)\b", re.I), "QA approval via kb.py CLI is forbidden."),
+    (re.compile(r"\bkb\.py\b[^\n]*\bqa[_-]?(?:start|approve|reject)\b", re.I), "QA approval via kb.py CLI is forbidden."),
+    (re.compile(r"\bapi_(?:manual_approve|qa_(?:start|approve|reject))\b", re.I), "Direct invocation of QA or manual approval Python APIs via shell is forbidden."),
+    (re.compile(r"(?:127\.0\.0\.1|localhost):789\d|manual[-_]?approve", re.I), "Calling the human web viewer approval endpoint via shell is forbidden."),
     (re.compile(r"\.qa_nonces\b", re.I), "Reading or modifying .qa_nonces via shell is forbidden."),
     (re.compile(r"\.qa_secret\b", re.I), "Reading or modifying .qa_secret via shell is forbidden."),
     (re.compile(r"(?:kanbanboard[\\/]board|\.kanban[\\/]board)", re.I), "Direct shell access to the centralized Kanban board directory is forbidden; use Kanban MCP tools."),
@@ -140,11 +142,11 @@ def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
                 if tpath.exists():
                     try:
                         with open(tpath, "r", encoding="utf-8", errors="ignore") as f:
-                            for _ in range(10):
+                            for _ in range(5):
                                 line = f.readline()
                                 if not line:
                                     break
-                                if "kb-qa" in line or "Kanban QA Auditor" in line:
+                                if line.strip().startswith("# Kanban QA Auditor (`kb-qa`)"):
                                     caller_type = "kb-qa"
                                     break
                     except Exception:

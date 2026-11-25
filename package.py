@@ -36,6 +36,7 @@ CORE_FILES = [
     "commands/kanban-status.md",
     "agents/kb-qa.md",
     "kb.py",
+    "kb_ergonomics.py",
     "mcp_server.py",
     "viewer.py",
     "apps/Board.bat",
@@ -43,6 +44,7 @@ CORE_FILES = [
     "tests/test_kanban.py",
     "tests/test_qa_lock.py",
     "tests/test_qa_e2e_isolation.py",
+    "tests/test_v24_upgrades.py",
 ]
 
 def collect_all_files():

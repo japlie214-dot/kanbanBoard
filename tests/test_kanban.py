@@ -535,17 +535,12 @@ class TestKanbanCore(unittest.TestCase):
                 self.assertIn("execution_log", t)
 
         # 2. Test HTML hydration
-        html = viewer.get_html_page(self.board)
-        self.assertIn("window.__INITIAL_DATA__ =", html)
+        html = viewer.get_html_page(self.board, "test-csrf-token")
         self.assertIn("Kanban Board", html)
-        self.assertIn("detail-drawer", html)
-        self.assertIn("dag-viz-container", html)
-        # Test collapsible fold elements & expand/collapse controls
-        self.assertIn("fold(root,", html)
-        self.assertIn("details > summary", html)
-        self.assertIn("btn-expand-all", html)
-        self.assertIn("btn-collapse-all", html)
-        self.assertIn("kb.open.", html)
+        self.assertIn("test-csrf-token", html)
+        self.assertIn("/assets/board.css", html)
+        self.assertIn("/assets/board.js", html)
+        self.assertIn('id="drawer"', html)
 
         # 3. Test board stamp hashing
         stamp = viewer.board_stamp(self.board)
@@ -562,7 +557,8 @@ class TestKanbanCore(unittest.TestCase):
             with urllib.request.urlopen(f"{base_url}/") as res:
                 self.assertEqual(res.status, 200)
                 body = res.read().decode("utf-8")
-                self.assertIn("window.__INITIAL_DATA__", body)
+                self.assertIn("Kanban Board", body)
+                self.assertIn("/assets/board.js", body)
 
             # Positive Test: GET /api/board
             with urllib.request.urlopen(f"{base_url}/api/board") as res:
@@ -576,7 +572,7 @@ class TestKanbanCore(unittest.TestCase):
                 self.assertEqual(res.status, 200)
                 h = json.loads(res.read().decode("utf-8"))
                 self.assertTrue(h["ok"])
-                self.assertTrue(h["readonly"])
+                self.assertIn("viewer", h.get("mode", ""))
 
             # Positive Test: HEAD /events
             req = urllib.request.Request(f"{base_url}/events", method="HEAD")
@@ -614,7 +610,11 @@ class TestKanbanCore(unittest.TestCase):
             post_approve = urllib.request.Request(
                 f"{base_url}/api/ticket/manual-approve",
                 data=approve_payload,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Origin": f"http://127.0.0.1:{port}",
+                    "X-Kanban-CSRF": server.csrf_token,
+                },
                 method="POST"
             )
             with urllib.request.urlopen(post_approve) as res:

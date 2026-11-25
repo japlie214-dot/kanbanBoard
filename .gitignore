@@ -12,3 +12,6 @@ Thumbs.db
 # Concurrency locks and ephemeral QA nonces
 board/.lock
 board/.qa_nonces/
+
+# Upgrade bundles
+kanbanBoard-*-upgrade/
