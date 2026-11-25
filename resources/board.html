@@ -13,17 +13,18 @@
     <div class="brand">
       <img src="/assets/logo.svg" alt="Kanban Board" width="26" height="26" class="brand-logo" />
       <span class="brand-title">Kanban Board</span>
-      <span class="board-path" id="board-dir">board/</span>
+      <span class="board-path" id="board-dir" title="Centralized board path">board/</span>
     </div>
 
     <div class="controls">
       <input type="search" id="f-q" class="search-input" placeholder="Search ref, title, agent (/)" autocomplete="off" />
-      <select id="f-project" class="select-input" aria-label="Filter by project">
-        <option value="">All projects</option>
-      </select>
       <select id="f-epic" class="select-input" aria-label="Filter by epic">
         <option value="">All epics</option>
       </select>
+      <label class="toggle-chip" title="Group board into horizontal project swimlanes">
+        <input type="checkbox" id="f-swimlanes" />
+        <span>Swimlanes</span>
+      </label>
       <label class="toggle-chip" title="Hide Done column">
         <input type="checkbox" id="f-hidedone" />
         <span>Hide Done</span>
@@ -54,27 +55,33 @@
     </div>
   </header>
 
+  <div class="quickbar" aria-label="Project quick filters">
+    <span class="quickbar-label">Projects</span>
+    <div id="project-pills" class="project-pills"></div>
+  </div>
+
   <main class="workspace">
-    <div id="board-columns" class="board-columns" aria-live="polite"></div>
+    <div id="board-canvas" class="board-canvas" aria-live="polite"></div>
 
     <aside id="drawer" class="drawer hidden" aria-label="Ticket Details">
       <div class="drawer-head">
         <div class="drawer-meta">
-          <span id="d-breadcrumb" class="breadcrumb"></span>
+          <div id="d-breadcrumb" class="breadcrumb"></div>
           <div class="drawer-title-row">
             <span id="d-ref" class="ref-chip"></span>
             <span id="d-status" class="status-pill"></span>
-            <h2 id="d-title" class="drawer-title"></h2>
+            <span id="d-rejected-pill" class="rejected-pill hidden">QA Rejected</span>
           </div>
+          <h2 id="d-title" class="drawer-title"></h2>
         </div>
         <div class="drawer-actions">
-          <button type="button" id="btn-drawer-approve" class="btn-approve hidden">✓ Approve</button>
+          <button type="button" id="btn-drawer-approve" class="btn-review hidden">Approve →</button>
           <button type="button" id="btn-copy-ref" class="btn-ghost">Copy Ref</button>
           <button type="button" id="btn-close-drawer" class="icon-btn" aria-label="Close drawer">✕</button>
         </div>
       </div>
 
-      <div class="drawer-lease-bar" id="d-lease-bar"></div>
+      <div id="d-meta-grid" class="meta-grid"></div>
 
       <nav class="drawer-tabs" role="tablist">
         <button type="button" class="tab-btn active" data-tab="overview" role="tab">Overview</button>
@@ -96,20 +103,28 @@
         <h3 id="approve-modal-title">Human Approval to DONE</h3>
         <button type="button" id="btn-close-modal" class="icon-btn" aria-label="Close modal">✕</button>
       </div>
-      <p class="modal-note">Approving <code id="m-ref"></code> will trigger a native OS confirmation popup to verify a human clicked Approve.</p>
+      <p class="modal-note">Approving <code id="m-ref"></code> triggers a native Windows confirmation popup to verify a human authorized this move.</p>
       <form id="approve-form">
         <label class="field">
-          <span>Approver name (min 2 chars)</span>
-          <input type="text" id="m-approver" required minlength="2" placeholder="Your name" />
+          <span>Approver name</span>
+          <input type="text" id="m-approver" value="Boss" required minlength="2" placeholder="Boss" />
         </label>
         <label class="field">
           <span>Approval reason (min 10 chars)</span>
           <textarea id="m-reason" rows="3" required minlength="10" placeholder="Verified output locally and tests pass..."></textarea>
         </label>
         <div id="m-error" class="form-error hidden"></div>
+
+        <div class="slide-approve-box">
+          <div class="slide-approve-label">
+            <span id="slide-label-text">Slide right to approve →</span>
+            <span id="slide-pct" class="muted">0%</span>
+          </div>
+          <input type="range" id="slide-approve" class="slide-approve-range" min="0" max="100" value="0" aria-label="Slide to approve ticket to DONE" />
+        </div>
+
         <div class="modal-actions">
           <button type="button" id="btn-cancel-approve" class="btn-ghost">Cancel</button>
-          <button type="submit" id="btn-submit-approve" class="btn-approve">Confirm &amp; Approve</button>
         </div>
       </form>
     </div>

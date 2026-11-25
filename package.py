@@ -45,6 +45,7 @@ CORE_FILES = [
     "tests/test_qa_lock.py",
     "tests/test_qa_e2e_isolation.py",
     "tests/test_v24_upgrades.py",
+    "tests/test_v25_upgrades.py",
 ]
 
 def collect_all_files():
