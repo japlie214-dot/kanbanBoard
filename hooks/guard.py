@@ -125,12 +125,35 @@ def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
             return False, f"BLOCKED: {reason}"
 
     if tool_name == "call_mcp_tool":
+        server_name = str(args.get("ServerName") or "")
         mcp_tool = str(args.get("ToolName") or "")
-        if mcp_tool == "kanban_qa":
-            return False, (
-                "BLOCKED: Direct invocation of kanban_qa by the main agent is forbidden. "
-                "Only the independent kb-qa subagent may audit and approve tickets."
+        if mcp_tool == "kanban_qa" or "kanban-qa" in server_name:
+            caller_type = (
+                payload.get("agent_type")
+                or payload.get("subagent_type")
+                or payload.get("caller")
+                or (payload.get("spec") or {}).get("typeName")
+                or ""
             )
+            if not caller_type and payload.get("transcriptPath"):
+                tpath = Path(payload["transcriptPath"])
+                if tpath.exists():
+                    try:
+                        with open(tpath, "r", encoding="utf-8", errors="ignore") as f:
+                            for _ in range(10):
+                                line = f.readline()
+                                if not line:
+                                    break
+                                if "kb-qa" in line or "Kanban QA Auditor" in line:
+                                    caller_type = "kb-qa"
+                                    break
+                    except Exception:
+                        pass
+            if caller_type != "kb-qa":
+                return False, (
+                    "BLOCKED: Direct invocation of kanban_qa by the main agent is forbidden. "
+                    "Only the independent kb-qa subagent may audit and approve tickets."
+                )
 
     return True, ""
 

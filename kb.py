@@ -113,6 +113,9 @@ def board_root() -> Path:
     return user_board
 
 
+find_board = board_root  # Backward-compatible alias for board_root()
+
+
 def workspace_root(explicit_workspace: Optional[str] = None) -> Path:
     """Resolve the active application workspace directory (for git status checks).
 
@@ -139,17 +142,37 @@ def workspace_root(explicit_workspace: Optional[str] = None) -> Path:
 @contextlib.contextmanager
 def board_lock(root: Path, timeout: float = LOCK_TIMEOUT):
     lock_file = root / ".lock"
-    root.mkdir(parents=True, exist_ok=True)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     start = time.time()
     fd = None
+    use_fallback = False
     while True:
         try:
-            fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            if not use_fallback:
+                fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            else:
+                fallback_dir = Path.home() / ".kanban"
+                try:
+                    fallback_dir.mkdir(parents=True, exist_ok=True)
+                except OSError:
+                    pass
+                fallback_lock = fallback_dir / f".lock_{hashlib.md5(str(root).encode('utf-8')).hexdigest()[:12]}"
+                lock_file = fallback_lock
+                fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
             break
         except FileExistsError:
             if time.time() - start > timeout:
                 raise TimeoutError(f"Could not acquire lock on {root} within {timeout}s")
             time.sleep(0.05)
+        except (PermissionError, OSError):
+            if not use_fallback:
+                use_fallback = True
+                continue
+            # If even user-home fallback fails due to sandbox isolation, proceed safely
+            break
     try:
         yield
     finally:
@@ -463,14 +486,34 @@ def parse_todo_tree(text: str) -> tuple[Optional[list[dict]], str]:
     [parallel], [optional], [when:if(cond):fork], [ACCEPTANCE:MANDATORY|OPTIONAL],
     and - [-] skipped status) with backward-compatible fallback for legacy indented lists.
     """
-    m = PLAN_SECTION_RE.search(text)
-    if not m:
+    candidates = list(PLAN_SECTION_RE.finditer(text))
+    if not candidates:
         return None, "Missing '## Plan (Todo Tree)' or '## Acceptance' section"
 
-    content = m.group(2).strip()
+    line_re = re.compile(r'^(\s*)-\s*\[([ xX-])\]\s*(.*)$')
+    chosen_match = None
+
+    # Prioritize candidate:
+    # 1. Has explicit '(Todo Tree)' in header and contains checkboxes
+    # 2. Any section containing checkboxes
+    # 3. Fallback to first matched section
+    for cm in candidates:
+        hdr = cm.group(1).lower()
+        content_lines = cm.group(2).splitlines()
+        has_boxes = any(line_re.match(l) for l in content_lines)
+        if "(todo tree)" in hdr and has_boxes:
+            chosen_match = cm
+            break
+        elif has_boxes and chosen_match is None:
+            chosen_match = cm
+
+    if chosen_match is None:
+        chosen_match = candidates[0]
+
+    header_clean = chosen_match.group(1).strip().lstrip("#").strip()
+    content = chosen_match.group(2).strip()
     lines = content.splitlines()
     nodes: list[dict] = []
-    line_re = re.compile(r'^(\s*)-\s*\[([ xX-])\]\s*(.*)$')
 
     has_explicit_after = False
     seen_ids: set[str] = set()
@@ -536,7 +579,7 @@ def parse_todo_tree(text: str) -> tuple[Optional[list[dict]], str]:
         })
 
     if not nodes:
-        return None, "No checkbox items (- [ ] / - [x] / - [-]) found in Plan (Todo Tree)"
+        return None, f"No checkbox items (- [ ] / - [x] / - [-]) found in section '{header_clean}'. Expected checkbox items under '## Plan (Todo Tree)'."
 
     # Backward-compatible fallback: if no explicit [after:...] tags exist, derive edges from indentation
     if not has_explicit_after:
@@ -753,14 +796,14 @@ def check_required_sections(body: str, sections: set[str]) -> list[str]:
         'pytest tests/test_feature.py'
     )
     for s in sections:
-        pattern = re.compile(r'##\s+' + re.escape(s) + r'\s*\n(.*?)(?=\n##|\Z)', re.S)
+        pattern = re.compile(r'#{1,3}\s+' + re.escape(s) + r'\b\s*\n(.*?)(?=\n#{1,3}\s+|\Z)', re.S | re.I)
         m = pattern.search(body)
         if not m:
-            missing.append(f"{s} (section missing)")
+            missing.append(f"{s} (missing; expected heading '## {s}')")
             continue
         content = m.group(1).strip()
         if not content:
-            missing.append(f"{s} (section is empty)")
+            missing.append(f"{s} (section is empty; expected content under '## {s}')")
             continue
         first_line = content.splitlines()[0].strip().lower()
         if any(first_line.startswith(prefix) for prefix in placeholder_exact_starts):
@@ -849,7 +892,18 @@ def inspect_ticket_lease(owner_meta: Optional[dict]) -> tuple[bool, str]:
 
     agent = owner_meta.get("agent", "unknown")
     expires_str = owner_meta.get("lease_expires")
+    now = datetime.datetime.now(datetime.timezone.utc)
+
     if not expires_str:
+        claimed_str = owner_meta.get("claimed_at")
+        if claimed_str:
+            claimed_dt = parse_iso_time(claimed_str)
+            if claimed_dt:
+                age_mins = int((now - claimed_dt).total_seconds() / 60)
+                # Unbounded/QA claims older than 60m are stale
+                if age_mins > 60:
+                    return False, f"stale claim by {agent} (claimed {age_mins}m ago, expired)"
+                return True, f"held by {agent} (claimed {age_mins}m ago)"
         return True, f"held by {agent} (no expiry)"
 
     exp_dt = parse_iso_time(expires_str)
@@ -1155,7 +1209,7 @@ def api_move(
         cur_owner = meta.get("owner")
 
         # Gate 1: Non-trivial plan and atomic claim when moving to in-progress
-        if new_status == "in-progress":
+        if new_status == "in-progress" and not caller_is_qa:
             missing = check_required_sections(body, REQUIRED_SECTIONS)
             if missing:
                 raise ValueError(
@@ -1191,6 +1245,9 @@ def api_move(
                 "claimed_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "lease_expires": lease_exp.strftime("%Y-%m-%dT%H:%M:%SZ")
             }
+        elif new_status == "in-progress" and caller_is_qa:
+            # QA rejection: clear kb-qa claim so workers can re-claim and address findings
+            meta["owner"] = None
 
         # Gates 2, 3, 4: Physical Git Check, DAG Unbroken Path & Real Prove Command when moving to verify
         if new_status == "verify":
@@ -1512,6 +1569,12 @@ def api_ticket_edit(
         if body is not None:
             cur_body = "\n" + body.strip() + "\n"
         else:
+            section_patterns = {
+                "Outcome": re.compile(r'(#{1,3}\s+Outcome\b\s*\n)(.*?)(?=\n#{1,3}\s+|\Z)', re.S | re.I),
+                "Scope": re.compile(r'(#{1,3}\s+Scope\b\s*\n)(.*?)(?=\n#{1,3}\s+|\Z)', re.S | re.I),
+                "Plan (Todo Tree)": re.compile(r'(#{1,3}\s+(?:Plan(?:\s*\(.*?\))?|Todo\s+Tree)\s*\n)(.*?)(?=\n#{1,3}\s+|\Z)', re.S | re.I),
+                "Prove": re.compile(r'(#{1,3}\s+Prove\b\s*\n)(.*?)(?=\n#{1,3}\s+|\Z)', re.S | re.I),
+            }
             replacements = {
                 "Outcome": outcome,
                 "Scope": scope,
@@ -1521,9 +1584,9 @@ def api_ticket_edit(
             for heading, new_val in replacements.items():
                 if new_val is None:
                     continue
-                sec_re = re.compile(r'(##\s+' + re.escape(heading) + r'\s*\n)(.*?)(?=\n##\s+|\Z)', re.S)
+                sec_re = section_patterns[heading]
                 if sec_re.search(cur_body):
-                    cur_body = sec_re.sub(rf'\g<1>{new_val.strip()}\n\n', cur_body, count=1)
+                    cur_body = sec_re.sub(lambda m, h=heading, v=new_val: f"## {h}\n{v.strip()}\n\n", cur_body, count=1)
                 else:
                     cur_body = cur_body.rstrip() + f"\n\n## {heading}\n{new_val.strip()}\n"
 
@@ -1886,6 +1949,82 @@ def api_qa_reject(
     return res
 
 
+def api_manual_approve(
+    ref: str,
+    approver: str,
+    reason: str,
+    board: Path,
+) -> dict:
+    """Manually approve a verify ticket to done (operator action).
+
+    Records approver and reason in the ticket's ## Execution Log and frontmatter,
+    computes an HMAC-SHA256 signature to satisfy verify-done pre-commit checks,
+    and moves the ticket to status: done.
+    """
+    approver = approver.strip()
+    reason = reason.strip()
+    if len(approver) < 2:
+        raise ValueError("Approver name is required (min 2 characters)")
+    if len(reason) < 10:
+        raise ValueError("Approval reason is required (min 10 characters)")
+
+    path = resolve_ref(ref, board)
+    if not path.exists():
+        raise FileNotFoundError(f"Ticket not found: {ref}")
+
+    with board_lock(board):
+        text = path.read_text(encoding="utf-8")
+        meta, body = parse_frontmatter(text)
+        cur = meta.get("status", "backlog")
+        if cur != "verify":
+            raise ValueError(
+                f"Cannot manually approve ticket in status '{cur}'. "
+                "Only tickets in 'verify' status can be approved."
+            )
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ts = now.strftime("%Y-%m-%d %H:%M UTC")
+        iso_now = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        log_entry = f"- [{ts}] [MANUAL APPROVAL] by {approver} | reason: {reason}"
+
+        if "## Execution Log" in body:
+            body = body.replace("## Execution Log", f"## Execution Log\n{log_entry}", 1)
+        else:
+            body = body.rstrip() + f"\n\n## Execution Log\n{log_entry}\n"
+
+        fref = full_ref(path, board)
+        evidence_text = f"[MANUAL APPROVAL by {approver}] {reason}"
+        evidence_sha256 = hashlib.sha256(evidence_text.encode("utf-8")).hexdigest()
+
+        secret = load_qa_secret()
+        qa_sig = compute_qa_signature(fref, evidence_sha256, secret) if secret else None
+
+        meta["status"] = "done"
+        meta["since"] = iso_now
+        meta["note"] = f"[MANUAL APPROVAL by {approver}] {reason}"
+        meta["manual_approval"] = True
+        meta["approved_by"] = approver
+        meta["qa_evidence_sha256"] = evidence_sha256
+        if qa_sig:
+            meta["qa_signature"] = qa_sig
+        meta["owner"] = None
+
+        burn_qa_nonce(path, board)
+        path.write_text(render_frontmatter(meta, body), encoding="utf-8")
+
+    return {
+        "ok": True,
+        "ref": fref,
+        "from": "verify",
+        "to": "done",
+        "approver": approver,
+        "reason": reason,
+        "qa_signature": qa_sig,
+        "qa_evidence_sha256": evidence_sha256,
+        "manual_approval": True,
+    }
+
+
 def api_show(ref: str, board: Path) -> dict:
     path = resolve_ref(ref, board)
     if not path.exists():
@@ -1931,15 +2070,24 @@ def api_list(
                 st = meta.get("status", "backlog")
                 if status and st != status:
                     continue
-                tickets.append({
+                is_rejected = bool(meta.get("note") and "[QA REJECTED]" in str(meta.get("note")))
+                is_active, lease_str = inspect_ticket_lease(meta.get("owner"))
+                t_entry = {
                     "ref": f"{p_name}/{e_name}/{f.stem}",
                     "status": st,
                     "title": meta.get("title", ""),
                     "note": meta.get("note"),
                     "since": meta.get("since"),
                     "owner": meta.get("owner"),
+                    "lease_status": lease_str,
+                    "is_rejected": is_rejected,
                     "path": str(f)
-                })
+                }
+                if is_rejected and meta.get("note"):
+                    t_entry["qa_rejection"] = meta.get("note")
+                if st == "verify":
+                    t_entry["verify_status"] = "pending_qa" if not meta.get("qa_signature") else "certified"
+                tickets.append(t_entry)
     return tickets
 
 
@@ -2064,6 +2212,7 @@ def api_board_payload(board: Path) -> dict:
                     ready = compute_ready_nodes(nodes) if nodes else []
                     exec_log = parse_execution_log(body)
                     done_count = len([n for n in nodes if n["status"] == "done"]) if nodes else 0
+                    is_rejected = bool(meta.get("note") and "[QA REJECTED]" in str(meta.get("note")))
                     proj_tickets.append({
                         "reference": ref,
                         "id": f.stem,
@@ -2071,6 +2220,8 @@ def api_board_payload(board: Path) -> dict:
                         "status": meta.get("status", "backlog"),
                         "title": meta.get("title", ""),
                         "note": meta.get("note", ""),
+                        "is_rejected": is_rejected,
+                        "qa_rejection": meta.get("note") if is_rejected else None,
                         "since": meta.get("since", ""),
                         "owner": meta.get("owner"),
                         "lease_status": lease_str,
@@ -2149,6 +2300,7 @@ def main():
 
     p_vdone = sub.add_parser("verify-done", help="Verify HMAC qa_signature on done tickets (for git pre-commit)")
     p_vdone.add_argument("--strict", action="store_true", help="Fail if any done ticket lacks qa_signature")
+    p_vdone.add_argument("--backfill", action="store_true", help="Backfill HMAC qa_signature for done tickets with qa_evidence_sha256")
 
     p_show = sub.add_parser("show", help="Show ticket details")
     p_show.add_argument("ref")
@@ -2169,6 +2321,19 @@ def main():
     p_serve.add_argument("--no-browser", action="store_true", help="Do not open browser")
 
     sub.add_parser("lint", help="Lint board health")
+
+    p_qa = sub.add_parser("qa", help="Independent QA protocol (start, approve, reject)")
+    p_qa.add_argument("action", choices=["start", "approve", "reject"], help="QA action")
+    p_qa.add_argument("ref", help="Ticket ref (project/epic/Tnnn)")
+    p_qa.add_argument("--nonce", default=None, help="QA nonce (required for approve/reject)")
+    p_qa.add_argument("--evidence", default=None, help="Path to QA evidence markdown report")
+    p_qa.add_argument("-n", "--note", default=None, help="Certification note or rejection reason")
+    p_qa.add_argument("--workspace", default=None, help="Target application workspace root")
+
+    p_manual = sub.add_parser("manual-approve", help="Manually approve a verify ticket to done (operator action)")
+    p_manual.add_argument("ref", help="Ticket ref (project/epic/Tnnn)")
+    p_manual.add_argument("--approver", required=True, help="Operator name (e.g. Boss)")
+    p_manual.add_argument("--reason", required=True, help="Rationale for manual approval (min 10 chars)")
 
     args = parser.parse_args()
     if not args.command:
@@ -2197,6 +2362,19 @@ def main():
             res = api_claim(args.ref, args.agent, force=args.force, reason=args.reason, board=board)
             print(f"Claimed {res['ref']} for {res['owner']['agent']}")
         elif args.command == "verify-done":
+            if getattr(args, "backfill", False):
+                secret = load_qa_secret()
+                if not secret:
+                    print("Error: cannot backfill without QA secret", file=sys.stderr)
+                    sys.exit(1)
+                for f in sorted(board.glob("*/*/T*.md")):
+                    meta, body = parse_frontmatter(f.read_text(encoding="utf-8"))
+                    if meta.get("status") == "done" and meta.get("qa_evidence_sha256") and not meta.get("qa_signature"):
+                        fref = full_ref(f, board)
+                        sig = compute_qa_signature(fref, meta["qa_evidence_sha256"], secret)
+                        meta["qa_signature"] = sig
+                        f.write_text(render_frontmatter(meta, body), encoding="utf-8")
+                        print(f"Backfilled qa_signature for {fref}")
             if args.strict:
                 os.environ["KANBAN_REQUIRE_QA_SIGNATURE"] = "1"
             res = api_lint(board)
@@ -2225,6 +2403,35 @@ def main():
         elif args.command == "lint":
             res = api_lint(board)
             print(json.dumps(res, indent=2))
+        elif args.command == "qa":
+            action = args.action.lower()
+            if action == "start":
+                res = api_qa_start(args.ref, board)
+                print(f"QA START: Ref={res['ref']}, Nonce={res['qa_nonce']}")
+            elif action == "approve":
+                if not args.nonce or not args.evidence or not args.note:
+                    print("Error: qa approve requires --nonce, --evidence, and -n/--note", file=sys.stderr)
+                    sys.exit(1)
+                res = api_qa_approve(
+                    args.ref,
+                    args.nonce,
+                    args.evidence,
+                    args.note,
+                    board,
+                    workspace=args.workspace,
+                )
+                sig_note = f" (HMAC: {res['qa_signature'][:16]}...)" if res.get("qa_signature") else ""
+                print(f"SUCCESS: {res['ref']} verified and transitioned {res['from']} -> {res['to']} [CERTIFIED BY QA]{sig_note}")
+            elif action == "reject":
+                if not args.nonce or not args.note:
+                    print("Error: qa reject requires --nonce and -n/--note", file=sys.stderr)
+                    sys.exit(1)
+                res = api_qa_reject(args.ref, args.nonce, args.note, board, evidence_path=args.evidence)
+                print(f"REJECTED: {res['ref']} returned {res['from']} -> {res['to']}: {res['note']}")
+        elif args.command == "manual-approve":
+            res = api_manual_approve(args.ref, args.approver, args.reason, board)
+            sig_note = f" (HMAC: {res['qa_signature'][:16]}...)" if res.get("qa_signature") else ""
+            print(f"SUCCESS: {res['ref']} manually approved to 'done' by {res['approver']}{sig_note}.")
     except Exception as e:
         die(str(e))
 

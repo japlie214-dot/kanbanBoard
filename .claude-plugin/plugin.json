@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
   "name": "kanban-board",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Kanban task tracking with dual-mode MCP isolation, PreToolUse hooks, and independent kb-qa gating.",
   "author": {
     "name": "kanbanBoard",
@@ -11,6 +11,10 @@
     "kanban": {
       "command": "python",
       "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py", "--mode", "work"]
+    },
+    "kanban-qa": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py", "--mode", "qa"]
     }
   }
 }

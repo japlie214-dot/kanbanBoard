@@ -85,7 +85,7 @@ The state engine strictly enforces quality standards in code:
 
 ## Strict Prohibitions
 1. **Never create or commit a `board/` folder in application repositories:** The board is strictly centralized (`C:\Projects\kanbanBoard\board` / `~/.kanban/board`). Application repositories must stay completely clean.
-2. **Never attempt to mark `done` yourself:** Only independent `kb-qa` can approve tickets to `done`. In Antigravity / Swarm, author agents must invoke a separate subagent (`invoke_subagent` with clean context) for QA verification rather than self-certifying in the same conversation.
+2. **Never attempt to mark `done` yourself:** Only independent `kb-qa` can approve tickets to `done`. Author agents must spawn a `kb-qa` subagent when the ticket is in `verify` rather than self-certifying.
 3. **Never commit or push code unless ticket is certified `done`:** Git commits are prohibited until certified by `kb-qa`.
 4. **No hand-edits to YAML status:** Always use MCP tools (`kanban_move`, `kanban_qa`).
 5. **Never skip living documentation:** Update `epic.md`/`project.md` whenever interfaces, dependencies, or contracts change.
@@ -96,7 +96,5 @@ The state engine strictly enforces quality standards in code:
 ## Agile DAG Planning & Parallel Execution Rules
 1. **Never Default to Fragile Linear Waterfall Plans**: Non-trivial tickets (`in-progress`) must account for real-world uncertainty by incorporating at least one contingency branch (`[when:if/else]`), parallel lane (`[parallel]`), or fallback join (`[after:A|B]`).
 2. **Instant Scaffolding**: Never write complex DAG syntax manually from scratch. Use `kanban_ticket(action="scaffold", pattern="agile")` or specify `pattern="agile|feature|spike|refactor"` during creation.
-3. **Behavior on `[parallel]` Lanes**:
-   - In Antigravity / Swarm: Coordinators may delegate unblocked parallel lanes (`ready_nodes`) to subagents via `invoke_subagent`.
-   - In Standalone CLI (Claude Code / Codex): The agent must batch independent tool calls and non-blockingly switch between parallel lanes without retreating.
+3. **Behavior on `[parallel]` Lanes**: Use swarm, subagents, or workflow for `[parallel]` lanes, or batch independent tool calls.
 4. **Dynamic In-Flight Pivoting**: When an environmental probe or condition test fails, do not retreat or re-plan from scratch. Skip the untaken branch cleanly via `kanban_update(skip_nodes=[...], skip_reason="...")` and proceed to the fallback branch.

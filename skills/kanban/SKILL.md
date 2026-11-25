@@ -23,15 +23,6 @@ This skill guides agents on interacting with the local file-backed Kanban board 
 
 ---
 
-## 0. The Centralized Board Architecture (NEVER Create Local `board/` in Repos)
-
-The Kanban board is **strictly centralized** across all workspaces (`C:\Projects\kanbanBoard\board` / `~/.kanban/board`).
-- **Zero Repo Pollution**: When working in any application repository (e.g. `C:\Projects\etoroNightwatch`, `C:\Projects\coom`, `C:\Projects\deckanim`), NEVER create, auto-sprout, or commit a `board/` directory inside that repository. The MCP tools automatically resolve to the centralized board directory.
-- **Always Pass `project="<slug>"`**: Every ticket belongs to a project slug in the central board (e.g. `kanban_ticket(project="nightwatch", epic="trunk", title="...")`). The central board routes it to `board/<slug>/<epic>/` automatically.
-- **Centralized Viewer**: The dashboard running at `http://127.0.0.1:7890` monitors the central board and displays all projects simultaneously.
-
----
-
 ## 1. The Agile DAG Mindset (Branching vs. Waterfall Fragility)
 
 ### Why Linear Waterfall Plans Fail Autonomous Agents
@@ -105,33 +96,10 @@ The **Todo Tree** is an **Adaptive Contingency Topology**. Rather than pretendin
 
 ---
 
-## 3. Multi-Agent Execution Behaviors for `[parallel]`
+## 3. Multi-Agent Execution Behaviors for `[parallel]` & QA Handover
 
-When `ready_nodes` returns multiple unblocked checkpoints across parallel lanes, agents must adapt their behavior to their host environment:
-
-### Mode A: Subagent Delegation (Google Antigravity / Swarm)
-- In runtimes with subagent tools (`invoke_subagent`, `run_workflow`, `swarm`):
-  1. The primary coordinator keeps the primary lane (`lane:core`).
-  2. The coordinator spawns a subagent to own the parallel lane:
-     ```python
-     invoke_subagent(
-         Role="UI Component Specialist",
-         Prompt="Execute checkpoint B1 on ticket ui/T004: Implement responsive SVG node-edge DAG renderer. Run tests and log proof via kanban_update."
-     )
-     ```
-  3. The subagent executes the checkpoint and records proof via `kanban_update(ref, checked_nodes=['B1'], node_proofs={'B1': ...})`.
-  4. Both agents work simultaneously; the coordinator resumes once parallel branches converge at the join checkpoint.
-
-### Mode B: Standalone Batching (Claude Code / Codex Single-Agent)
-- In single-agent runtimes without subagent spawning:
-  1. **Tool-Call Batching**: Issue independent tool calls for both lanes in a single turn.
-  2. **Non-Blocking Resilience**: If Lane A is waiting on user input or a long compilation, the agent immediately switches to Lane B without retreating or idling.
-  3. **Order Independence**: Checkpoints are checked off as each finishes.
-
-### Mode C: Tri-Runtime Swarm (Connecting CC, Codex & AGY via `coom`)
-- In cross-agent collaborative environments:
-  1. The leasing agent invites a peer agent via `coom` message: `@claude-code Lane B is ready on ui/T004`.
-  2. Claude Code checks out the workspace, completes Lane B, and updates the board via `kanban_update`.
+- **Parallel Workstreams (`[parallel]`)**: Use swarm, subagents, or workflow for `[parallel]` lanes.
+- **Asynchronous QA Handover**: Spawn `kb-qa` once the ticket is in `verify`. While waiting for `kb-qa`, work on another ticket if available.
 
 ---
 

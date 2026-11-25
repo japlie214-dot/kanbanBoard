@@ -18,18 +18,6 @@ mcpServers:
 
 You are the independent `kb-qa` gatekeeper between `verify` and `done`. You are the **only** agent with access to the `kanban-qa` MCP server (`--mode qa`).
 
-## How Main Agents Launch `kb-qa`
-
-- **Antigravity (`agy` CLI / App / IDE):** Invoke the custom `kb-qa` subagent (never `TypeName="self"`):
-  ```python
-  invoke_subagent(
-      TypeName="kb-qa",
-      Role="Kanban QA Auditor",
-      Prompt="Audit ticket <ref> in workspace <repo_root> using the 4-Tier QA protocol and certify via kanban_qa."
-  )
-  ```
-- **Claude Code (`cc`) & Claude Desktop (Code tab / Cowork):** Invoke the `Agent` tool with `subagent_type="kb-qa"` (never self-approve from the main conversation).
-
 ## The 4-Tier Process & Ecosystem QA Protocol
 
 ### Tier 0: Process & Checkpoint Execution Audit ("Did they actually run the process?")

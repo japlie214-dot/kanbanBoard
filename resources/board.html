@@ -946,6 +946,230 @@ details > summary::-webkit-details-marker {
   margin-bottom: 14px;
 }
 .charter-title { font-size: 13px; font-weight: 800; color: var(--proj); margin: 0 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+
+/* Manual Approval Modal & Action Buttons */
+.btn-approve-action {
+  background: var(--good) !important;
+  color: #ffffff !important;
+  border-color: var(--good) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3);
+}
+.btn-approve-action:hover {
+  filter: brightness(1.1);
+}
+.card-approve-btn {
+  background: color-mix(in srgb, var(--good) 15%, transparent);
+  color: var(--good);
+  border: 1px solid color-mix(in srgb, var(--good) 40%, transparent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+.card-approve-btn:hover {
+  background: var(--good);
+  color: #ffffff;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+  animation: modalFadeIn 0.15s ease-out;
+}
+.modal-overlay[hidden] {
+  display: none !important;
+}
+.modal-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-width: 520px;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modalSlideUp {
+  from { transform: translateY(12px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-elevated);
+}
+.modal-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: color-mix(in srgb, var(--good) 20%, transparent);
+  color: var(--good);
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--good) 40%, transparent);
+  display: inline-block;
+  margin-bottom: 4px;
+}
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.modal-close-btn:hover {
+  background: var(--line);
+  color: var(--text);
+}
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-ticket-summary {
+  background: var(--panel-elevated);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.modal-ticket-ref {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.modal-ticket-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+.modal-alert-box {
+  background: var(--good-soft);
+  border: 1px solid color-mix(in srgb, var(--good) 30%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.form-label .req {
+  color: var(--bad);
+}
+.form-input, .form-textarea {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.form-input:focus, .form-textarea:focus {
+  outline: none;
+  border-color: var(--good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 25%, transparent);
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.modal-error-box {
+  background: var(--bad-soft);
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.btn-cancel {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-cancel:hover {
+  background: var(--panel-elevated);
+  color: var(--text);
+}
+.btn-confirm-approve {
+  background: var(--good);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s ease;
+}
+.btn-confirm-approve:hover {
+  filter: brightness(1.08);
+}
+.btn-confirm-approve:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -997,6 +1221,7 @@ details > summary::-webkit-details-marker {
     </div>
 
     <div class="drawer-actions">
+      <button class="btn-action btn-approve-action" id="btn-drawer-approve" type="button" style="display:none;" title="Manually approve ticket to done">✓ Approve</button>
       <button class="btn-action" id="btn-copy-ref" type="button">📋 Copy Ref</button>
       <button class="btn-action" id="btn-expand" type="button">⛶ Expand</button>
       <button class="btn-action btn-close-prominent" id="btn-close-drawer" type="button" title="Close (Esc)">✕ Close</button>
@@ -1076,6 +1301,56 @@ details > summary::-webkit-details-marker {
     </div>
   </div>
 </aside>
+
+<!-- Manual Approval Modal Dialog -->
+<div id="approve-modal-overlay" class="modal-overlay" hidden>
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-header">
+      <div class="modal-title-wrap">
+        <span class="modal-badge">Operator Action</span>
+        <h3 id="modal-title" class="modal-title">Manual Ticket Approval</h3>
+      </div>
+      <button type="button" class="modal-close-btn" id="modal-close-x" title="Close dialog">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="modal-ticket-summary">
+        <div class="modal-ticket-ref" id="m-ticket-ref">project/epic/T000</div>
+        <div class="modal-ticket-title" id="m-ticket-title">Ticket Title</div>
+      </div>
+
+      <div class="modal-alert-box">
+        <span style="font-size:16px;">🛡️</span>
+        <div>
+          Manual certification moves this ticket from <strong>verify</strong> to <strong>done</strong>. Your name and rationale will be permanently recorded in the ticket's Execution Log and signed with HMAC-SHA256. AI coding agents cannot invoke this action.
+        </div>
+      </div>
+
+      <form id="approve-form" onsubmit="handleApproveSubmit(event)">
+        <div class="form-group">
+          <label for="m-approver" class="form-label">Approver Name <span class="req">*</span></label>
+          <input type="text" id="m-approver" class="form-input" placeholder="e.g. Boss, Alvin Lie" required minlength="2" autocomplete="name">
+          <span class="form-hint">Operator name or role certifying acceptance.</span>
+        </div>
+
+        <div class="form-group" style="margin-top:10px;">
+          <label for="m-reason" class="form-label">Acceptance Rationale / Reason <span class="req">*</span></label>
+          <textarea id="m-reason" class="form-textarea" placeholder="Explain why this ticket meets acceptance criteria or why deviations are accepted (min 10 characters)..." required minlength="10" rows="3"></textarea>
+          <span class="form-hint">Recorded in ## Execution Log and frontmatter note for QA audit trail.</span>
+        </div>
+
+        <div id="m-error-msg" class="modal-error-box" style="display:none;margin-top:10px;"></div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="modal-btn-cancel">Cancel</button>
+          <button type="submit" class="btn-confirm-approve" id="modal-btn-submit">
+            <span id="m-btn-text">✓ Certify &amp; Approve to Done</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
 const statuses = ["backlog", "in-progress", "verify", "done", "blocked"];
@@ -1306,6 +1581,14 @@ function renderCard(t) {
   if (t.attachments && t.attachments.length) {
     add(meta, "span", "card-tag", "📎 " + t.attachments.length);
   }
+  if (t.status === "verify") {
+    const approveBtn = add(meta, "button", "card-approve-btn", "✓ Approve");
+    approveBtn.title = "Manually approve ticket to done (Operator Action)";
+    approveBtn.onclick = (e) => {
+      e.stopPropagation();
+      openApproveModal(t.reference);
+    };
+  }
 
   // Progress Bar
   if (t.dag_nodes && t.dag_nodes.length) {
@@ -1342,6 +1625,16 @@ function openDetail(ref, switchTab = false) {
   $("d-title").textContent = t.title || "Untitled";
   $("d-status").textContent = t.status;
   $("d-status").dataset.status = t.status;
+
+  const drawerApproveBtn = $("btn-drawer-approve");
+  if (drawerApproveBtn) {
+    if (t.status === "verify") {
+      drawerApproveBtn.style.display = "inline-flex";
+      drawerApproveBtn.onclick = () => openApproveModal(t.reference);
+    } else {
+      drawerApproveBtn.style.display = "none";
+    }
+  }
 
   // Sidebar Metadata
   $("d-agent").textContent = t.owner && t.owner.agent ? `👤 ${t.owner.agent}` : "(unassigned)";
@@ -1765,7 +2058,14 @@ $("f-hidedone").onchange = () => render(currentBoardData);
    Keyboard Shortcuts & Toolbar Actions
    ========================================================================== */
 window.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeDrawer();
+  if (e.key === "Escape") {
+    const modal = $("approve-modal-overlay");
+    if (modal && !modal.hidden) {
+      closeApproveModal();
+      return;
+    }
+    closeDrawer();
+  }
   if (e.key === "/" && document.activeElement !== $("f-q")) {
     e.preventDefault();
     $("f-q").focus();
@@ -1778,6 +2078,97 @@ window.addEventListener("keydown", e => {
     toggleAllDetails(anyClosed);
   }
 });
+
+/* ==========================================================================
+   Manual Approval Modal Dialog
+   ========================================================================== */
+let approvingRef = null;
+
+function openApproveModal(ref) {
+  const t = ticketIndex.get(ref);
+  if (!t) return;
+  approvingRef = ref;
+
+  $("m-ticket-ref").textContent = ref;
+  $("m-ticket-title").textContent = t.title || "Untitled";
+  $("m-approver").value = "";
+  $("m-reason").value = "";
+  $("m-error-msg").style.display = "none";
+  $("m-error-msg").textContent = "";
+  $("modal-btn-submit").disabled = false;
+  $("m-btn-text").textContent = "✓ Certify & Approve to Done";
+
+  const modal = $("approve-modal-overlay");
+  modal.hidden = false;
+  setTimeout(() => $("m-approver").focus(), 50);
+}
+
+function closeApproveModal() {
+  approvingRef = null;
+  const modal = $("approve-modal-overlay");
+  if (modal) modal.hidden = true;
+}
+
+async function handleApproveSubmit(e) {
+  e.preventDefault();
+  if (!approvingRef) return;
+
+  const approver = $("m-approver").value.trim();
+  const reason = $("m-reason").value.trim();
+  const errBox = $("m-error-msg");
+
+  if (approver.length < 2) {
+    errBox.textContent = "Approver name must be at least 2 characters.";
+    errBox.style.display = "block";
+    return;
+  }
+  if (reason.length < 10) {
+    errBox.textContent = "Approval reason must be at least 10 characters.";
+    errBox.style.display = "block";
+    return;
+  }
+
+  const submitBtn = $("modal-btn-submit");
+  submitBtn.disabled = true;
+  $("m-btn-text").textContent = "Certifying...";
+  errBox.style.display = "none";
+
+  try {
+    const res = await fetch("/api/ticket/manual-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: approvingRef,
+        approver: approver,
+        reason: reason
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Approval failed");
+    }
+
+    closeApproveModal();
+    await refresh();
+    if (currentTicketRef === approvingRef) {
+      openDetail(approvingRef, false);
+    }
+  } catch (err) {
+    errBox.textContent = err.message || "An unexpected error occurred.";
+    errBox.style.display = "block";
+    submitBtn.disabled = false;
+    $("m-btn-text").textContent = "✓ Certify & Approve to Done";
+  }
+}
+
+$("approve-modal-overlay").addEventListener("click", e => {
+  if (e.target === $("approve-modal-overlay")) {
+    closeApproveModal();
+  }
+});
+$("modal-close-x").onclick = closeApproveModal;
+$("modal-btn-cancel").onclick = closeApproveModal;
 
 function toggleAllDetails(open) {
   for (const node of document.querySelectorAll("details.lane, details.epic")) {

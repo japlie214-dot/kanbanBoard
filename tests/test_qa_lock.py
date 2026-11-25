@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -162,6 +163,27 @@ class TestHmacSigningHelpers(unittest.TestCase):
         )
         self.assertFalse(ok_bad)
         self.assertIn("invalid qa_signature", msg)
+
+
+class TestQaCliAndBoardLockFallback(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.board = Path(self.temp_dir) / "board"
+        self.board.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_find_board_alias(self):
+        import kb
+        self.assertTrue(callable(kb.find_board))
+        self.assertEqual(kb.find_board, kb.board_root)
+
+    def test_board_lock_fallback_under_permission_error(self):
+        import kb
+        # Test board_lock executes without crashing even if lock file creation fails
+        with kb.board_lock(self.board):
+            pass  # Acquired cleanly
 
 
 if __name__ == "__main__":

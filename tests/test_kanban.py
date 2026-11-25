@@ -599,6 +599,38 @@ class TestKanbanCore(unittest.TestCase):
             except urllib.error.HTTPError as e:
                 self.assertEqual(e.code, 405)
 
+            # Positive Test: POST /api/ticket/manual-approve for a ticket in verify
+            # Create a ticket in demo/feature and set it to verify
+            v_ticket = self.board / "demo" / "feature" / "T099.md"
+            v_ticket.write_text(
+                "---\nstatus: verify\ntitle: Verify candidate\n---\n\n## Outcome\nO\n## Scope\nS\n## Plan (Todo Tree)\n- [x] A1. [START] [ACCEPTANCE:MANDATORY] Done\n## Prove\npytest\n## Execution Log\n- [2026-11-25 00:00 UTC] [DONE] A1 | proof: ok\n",
+                encoding="utf-8"
+            )
+            approve_payload = json.dumps({
+                "ref": "demo/feature/T099",
+                "approver": "Boss",
+                "reason": "Accepted based on verified device logs."
+            }).encode("utf-8")
+            post_approve = urllib.request.Request(
+                f"{base_url}/api/ticket/manual-approve",
+                data=approve_payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(post_approve) as res:
+                self.assertEqual(res.status, 200)
+                resp_data = json.loads(res.read().decode("utf-8"))
+                self.assertTrue(resp_data.get("ok"))
+                self.assertEqual(resp_data.get("to"), "done")
+                self.assertEqual(resp_data.get("approver"), "Boss")
+
+            # Negative Test: POST /api/ticket/manual-approve on already done ticket -> 400
+            try:
+                urllib.request.urlopen(post_approve)
+                self.fail("Expected 400 for already done ticket")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 400)
+
         finally:
             server.server_close()
             t.join(timeout=2)
@@ -639,6 +671,66 @@ class TestKanbanCore(unittest.TestCase):
         finally:
             if old_ws:
                 os.environ["KANBAN_WORKSPACE_ROOT"] = old_ws
+
+
+    def test_manual_approve_lifecycle_and_security_invariants(self):
+        """Test kb.api_manual_approve mechanical gates, logging, and HMAC signatures."""
+        kb.api_init("demo", "core", self.board)
+        t_path = self.board / "demo" / "core" / "T098.md"
+        t_path.write_text(
+            "---\nstatus: in-progress\ntitle: Feature in progress\n---\n\n## Outcome\nO\n## Scope\nS\n## Plan (Todo Tree)\n- [x] A1. [START] [ACCEPTANCE:MANDATORY] Done\n## Prove\npytest\n## Execution Log\n- [2026-11-25 00:00 UTC] [DONE] A1 | proof: ok\n",
+            encoding="utf-8"
+        )
+        # 1. Reject if ticket not in 'verify'
+        with self.assertRaises(ValueError) as ctx:
+            kb.api_manual_approve("demo/core/T098", "Boss", "Valid reason exceeding 10 characters", self.board)
+        self.assertIn("Only tickets in 'verify' status can be approved", str(ctx.exception))
+
+        # Set ticket to verify
+        t_path.write_text(
+            "---\nstatus: verify\ntitle: Feature ready for review\n---\n\n## Outcome\nO\n## Scope\nS\n## Plan (Todo Tree)\n- [x] A1. [START] [ACCEPTANCE:MANDATORY] Done\n## Prove\npytest\n## Execution Log\n- [2026-11-25 00:00 UTC] [DONE] A1 | proof: ok\n",
+            encoding="utf-8"
+        )
+
+        # 2. Reject if approver too short
+        with self.assertRaises(ValueError) as ctx:
+            kb.api_manual_approve("demo/core/T098", "A", "Valid reason exceeding 10 characters", self.board)
+        self.assertIn("Approver name is required", str(ctx.exception))
+
+        # 3. Reject if reason too short
+        with self.assertRaises(ValueError) as ctx:
+            kb.api_manual_approve("demo/core/T098", "Boss", "short", self.board)
+        self.assertIn("Approval reason is required", str(ctx.exception))
+
+        # 4. Successful manual approval
+        res = kb.api_manual_approve(
+            "demo/core/T098",
+            "Boss",
+            "Accepted after reviewing device telemetry and supervisor logs.",
+            self.board
+        )
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["to"], "done")
+        self.assertEqual(res["approver"], "Boss")
+        self.assertTrue(res["manual_approval"])
+
+        # Check file content & frontmatter
+        meta, body = kb.parse_frontmatter(t_path.read_text(encoding="utf-8"))
+        self.assertEqual(meta["status"], "done")
+        self.assertTrue(meta["manual_approval"])
+        self.assertEqual(meta["approved_by"], "Boss")
+        self.assertIn("[MANUAL APPROVAL by Boss]", meta["note"])
+        self.assertIn("[MANUAL APPROVAL] by Boss | reason: Accepted after reviewing device telemetry", body)
+
+        # Check HMAC signature verification
+        secret = kb.load_qa_secret()
+        if secret:
+            ok_sig, sig_msg = kb.verify_qa_signature("demo/core/T098", meta, secret)
+            self.assertTrue(ok_sig, f"Signature failed: {sig_msg}")
+
+        # Check board lint
+        lint_res = kb.api_lint(self.board)
+        self.assertEqual(lint_res["errors"], [])
 
 
 if __name__ == "__main__":

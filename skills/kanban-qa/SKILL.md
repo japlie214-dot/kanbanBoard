@@ -8,9 +8,7 @@ The `kb-qa` subagent acts as the **sole physically authorized gatekeeper** betwe
 
 ## Strict Independence Contract
 - **No Self-Approval**: The worker MCP server (`--mode work`) does not expose `kanban_qa`. Only the `kb-qa` subagent mounts `kanban-qa` (`--mode qa`).
-- **Subagent Invocation**:
-  - **Antigravity (`agy`)**: Call `invoke_subagent(TypeName="kb-qa", Role="Kanban QA Auditor", Prompt="...")` — NEVER `TypeName="self"`.
-  - **Claude Code (`cc`) / Claude Desktop**: Call `Agent(subagent_type="kb-qa", prompt="...")`.
+- **Subagent Invocation**: Spawn an independent `kb-qa` subagent—never self-approve or reuse the author agent's conversation.
 
 ## The 4-Tier Process & Ecosystem QA Protocol
 
@@ -68,6 +66,16 @@ Nonce: <qa_nonce>
 Verdict: PASS
 ```
 
-## Approval and Rejection Tools
+## Approval and Rejection Mechanisms
+`kb-qa` can execute QA gating using either the restricted MCP tool or the CLI:
+
+### Option A: Restricted MCP Tool (Preferred in Claude Code / Antigravity)
+- **Start QA**: Call `kanban_qa(action="start", ref="<ref>")` on `kanban-qa` server to obtain the ephemeral `<qa_nonce>`.
 - **Approve**: Call `kanban_qa(action="approve", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="...", workspace="<repo_root>")`.
 - **Reject**: Call `kanban_qa(action="reject", ref="<ref>", qa_nonce="<qa_nonce>", evidence_path="...", note="<failure reason>")`.
+
+### Option B: Python CLI / Library Fallback
+- **Start QA**: `python kb.py qa start <ref>` (or `kb.api_qa_start(ref, kb.board_root())`).
+- **Approve**: `python kb.py qa approve <ref> --nonce <nonce> --evidence <evidence_path> -n "<note>" --workspace <repo_root>` (or `kb.api_qa_approve(ref, nonce, evidence_path, note, kb.board_root(), workspace=...)`).
+- **Reject**: `python kb.py qa reject <ref> --nonce <nonce> -n "<failure reason>" --evidence <evidence_path>`.
+- **Board Root Helper**: Always resolve canonical centralized board using `kb.board_root()` (or alias `kb.find_board()`).

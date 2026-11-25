@@ -93,9 +93,48 @@ class KanbanHandler(BaseHTTPRequestHandler):
         self._handle(head=True)
 
     def _deny(self):
-        self._json(405, {"error": "read-only server: only GET and HEAD are allowed"}, False)
+        self._json(405, {"error": "read-only server: only GET, HEAD and /api/ticket/manual-approve are allowed"}, False)
 
-    do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = _deny
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = _deny
+
+    def do_POST(self):
+        client_ip = self.client_address[0]
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            return self._json(403, {"ok": False, "error": "forbidden: loopback access only"}, False)
+
+        path = urlsplit(self.path).path
+        board = self.server.board
+
+        if path == "/api/ticket/manual-approve":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length == 0:
+                    return self._json(400, {"ok": False, "error": "empty request body"}, False)
+                body = self.rfile.read(length).decode("utf-8")
+                payload = json.loads(body)
+            except Exception as e:
+                return self._json(400, {"ok": False, "error": f"invalid json payload: {e}"}, False)
+
+            ref = str(payload.get("ref") or "").strip()
+            approver = str(payload.get("approver") or "").strip()
+            reason = str(payload.get("reason") or "").strip()
+
+            if not ref:
+                return self._json(400, {"ok": False, "error": "missing 'ref' parameter"}, False)
+            if len(approver) < 2:
+                return self._json(400, {"ok": False, "error": "approver name is required (min 2 characters)"}, False)
+            if len(reason) < 10:
+                return self._json(400, {"ok": False, "error": "approval reason is required (min 10 characters)"}, False)
+
+            try:
+                res = kb.api_manual_approve(ref, approver, reason, board)
+                return self._json(200, res, False)
+            except (ValueError, FileNotFoundError, PermissionError) as e:
+                return self._json(400, {"ok": False, "error": str(e)}, False)
+            except Exception as e:
+                return self._json(500, {"ok": False, "error": f"server error: {e}"}, False)
+
+        return self._deny()
 
     def _handle(self, head: bool):
         path = urlsplit(self.path).path

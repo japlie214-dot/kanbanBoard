@@ -81,8 +81,11 @@ def clean_zip_archives():
 def make_plugin_archive(dest_path: Path, files_to_include):
     """Build a standard POSIX-compliant .plugin archive (zip container)."""
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    if dest_path.exists():
-        dest_path.unlink()
+    try:
+        if dest_path.exists():
+            dest_path.unlink()
+    except OSError:
+        pass
 
     with zipfile.ZipFile(dest_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for rel_str in files_to_include:
