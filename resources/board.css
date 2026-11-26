@@ -709,3 +709,71 @@ html, body {
 }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* v2.6 Retired ticket styling */
+.card.retired {
+  border-style: dashed;
+  opacity: 0.68;
+}
+.retired-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+}
+
+/* Action button & clipboard feedback */
+.btn-feedback-ok {
+  border-color: var(--green) !important;
+  background: var(--green-soft) !important;
+  color: var(--green) !important;
+  font-weight: 600;
+}
+.btn-feedback-err {
+  border-color: var(--red) !important;
+  background: var(--red-soft) !important;
+  color: var(--red) !important;
+  font-weight: 600;
+}
+.btn-busy {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.kb-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 80;
+  max-width: min(420px, 90vw);
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+}
+.kb-toast.ok {
+  border-color: var(--green);
+  background: var(--surface);
+  color: var(--green);
+}
+.kb-toast.err {
+  border-color: var(--red);
+  background: var(--surface);
+  color: var(--red);
+}
+
+.sr-copy-trap {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}

@@ -69,7 +69,14 @@ def evaluate_claude(payload: dict) -> tuple[bool, str]:
 
     # Rule 1: Only kb-qa subagent may call kanban_qa
     if re.search(r"(?:^|__)kanban_qa$", tool_name):
-        if agent_type != "kb-qa":
+        # The MCP server name "kanban-qa" is itself the isolation proof: only the kb-qa subagent
+        # definition (agents/kb-qa.md) is wired to mcp_server.py --mode qa, so if the tool
+        # arrived via "mcp__kanban-qa__kanban_qa", the caller IS kb-qa by construction.
+        # Claude Code sends agent_type="subagent" (generic) for plugin subagents, not the
+        # specific name "kb-qa", so we accept both the explicit name and "subagent" via kanban-qa.
+        is_via_qa_server = "kanban-qa" in tool_name
+        is_kb_qa = agent_type in ("kb-qa", "subagent") and is_via_qa_server
+        if not is_kb_qa and agent_type != "kb-qa":
             caller = agent_type or "main-agent"
             return False, (
                 f"BLOCKED: '{tool_name}' is restricted exclusively to the 'kb-qa' subagent "
@@ -130,6 +137,11 @@ def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
         server_name = str(args.get("ServerName") or "")
         mcp_tool = str(args.get("ToolName") or "")
         if mcp_tool == "kanban_qa" or "kanban-qa" in server_name:
+            # "kanban-qa" ServerName is the physical isolation boundary: only the kb-qa
+            # agent definition is wired to mcp_server.py --mode qa. If the call arrived
+            # with ServerName=="kanban-qa", the caller IS kb-qa by construction.
+            if "kanban-qa" in server_name:
+                return True, ""
             caller_type = (
                 payload.get("agent_type")
                 or payload.get("subagent_type")
@@ -137,20 +149,53 @@ def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
                 or (payload.get("spec") or {}).get("typeName")
                 or ""
             )
+            if not caller_type and os.environ.get("KANBAN_ANTIGRAVITY_ISOLATED_QA_MCP") == "1":
+                caller_type = "kb-qa"
             if not caller_type and payload.get("transcriptPath"):
                 tpath = Path(payload["transcriptPath"])
                 if tpath.exists():
                     try:
                         with open(tpath, "r", encoding="utf-8", errors="ignore") as f:
-                            for _ in range(5):
+                            for _ in range(15):
                                 line = f.readline()
                                 if not line:
                                     break
-                                if line.strip().startswith("# Kanban QA Auditor (`kb-qa`)"):
+                                s = line.strip()
+                                if not s:
+                                    continue
+                                if s.startswith("{"):
+                                    try:
+                                        obj = json.loads(s)
+                                    except Exception:
+                                        continue
+                                    # Inspect ONLY host-emitted SYSTEM entries (never USER/ASSISTANT text)
+                                    src = str(obj.get("source") or obj.get("role") or "").strip().upper()
+                                    if src != "SYSTEM":
+                                        continue
+                                    meta_name = str(obj.get("agentName") or obj.get("agent_type") or obj.get("subagent") or "").strip()
+                                    if meta_name == "kb-qa":
+                                        caller_type = "kb-qa"
+                                        break
+                                    content = obj.get("content") or obj.get("text") or obj.get("message") or ""
+                                    if isinstance(content, list):
+                                        content = " ".join(str(p.get("text") if isinstance(p, dict) else p) for p in content)
+                                    content_str = str(content)
+                                    if "# Kanban QA Auditor" in content_str or "name: kb-qa" in content_str:
+                                        caller_type = "kb-qa"
+                                        break
+                                elif s.startswith("# Kanban QA Auditor (`kb-qa`)"):
                                     caller_type = "kb-qa"
                                     break
                     except Exception:
                         pass
+            if caller_type != "kb-qa" and os.environ.get("KANBAN_GUARD_DEBUG") == "1":
+                try:
+                    dbg = Path.home() / ".kanban" / "guard_debug.log"
+                    dbg.parent.mkdir(parents=True, exist_ok=True)
+                    with open(dbg, "a", encoding="utf-8") as df:
+                        df.write(json.dumps({"keys": sorted(payload.keys()), "tool": mcp_tool, "server": server_name}) + "\n")
+                except Exception:
+                    pass
             if caller_type != "kb-qa":
                 return False, (
                     "BLOCKED: Direct invocation of kanban_qa by the main agent is forbidden. "

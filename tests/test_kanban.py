@@ -535,7 +535,7 @@ class TestKanbanCore(unittest.TestCase):
                 self.assertIn("execution_log", t)
 
         # 2. Test HTML hydration
-        html = viewer.get_html_page(self.board, "test-csrf-token")
+        html = viewer.get_html_page("test-csrf-token")
         self.assertIn("Kanban Board", html)
         self.assertIn("test-csrf-token", html)
         self.assertIn("/assets/board.css", html)

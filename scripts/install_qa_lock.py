@@ -52,6 +52,8 @@ def render_kb_qa_agent(sec_file: Path) -> str:
     text = KB_QA_TEMPLATE.read_text(encoding="utf-8")
     mcp_posix = MCP_SERVER.as_posix()
     text = text.replace("C:/Projects/kanbanBoard/mcp_server.py", mcp_posix)
+    text = text.replace("${CLAUDE_PLUGIN_ROOT}/mcp_server.py", mcp_posix)
+    text = text.replace("${PLUGIN_ROOT}/mcp_server.py", mcp_posix)
     if "KANBAN_QA_SECRET_FILE" not in text:
         text = text.replace(
             '      KANBAN_REQUIRE_QA_SIGNATURE: "1"',

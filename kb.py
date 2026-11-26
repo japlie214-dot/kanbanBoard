@@ -1209,6 +1209,11 @@ def api_move(
         now = datetime.datetime.now(datetime.timezone.utc)
         cur_owner = meta.get("owner")
 
+        # Auto-restore if claiming a retired ticket back to active work
+        if new_status == "in-progress" and meta.get("retired"):
+            for _rkey in ("retired", "retired_at", "retire_reason", "purge_after_days"):
+                meta.pop(_rkey, None)
+
         # Gate 1: Non-trivial plan and atomic claim when moving to in-progress
         if new_status == "in-progress" and not caller_is_qa:
             missing = check_required_sections(body, REQUIRED_SECTIONS)
@@ -2085,6 +2090,12 @@ def api_list(
                     "is_rejected": is_rejected,
                     "path": str(f)
                 }
+                if meta.get("retired"):
+                    t_entry["retired"] = True
+                    if meta.get("retired_at"):
+                        t_entry["retired_at"] = meta.get("retired_at")
+                    if meta.get("purge_after_days") is not None:
+                        t_entry["purge_after_days"] = meta.get("purge_after_days")
                 if is_rejected and meta.get("note"):
                     t_entry["qa_rejection"] = meta.get("note")
                 if st == "verify":

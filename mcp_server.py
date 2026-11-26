@@ -25,9 +25,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Add project root to path to import kb
-import kb_ergonomics
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
+import kb_crud
+import kb_ergonomics
 
 SERVER_NAME = "kanban"
 SERVER_VERSION = "2.3.0"
@@ -63,19 +64,23 @@ TOOLS = [
                 },
                 "project": {"type": "string", "description": "Project slug (used for filter or initialization)"},
                 "epic": {"type": "string", "description": "Epic slug (used for filter or initialization)"},
+                "page": {"type": "integer", "description": "1-based page number (default 1)"},
+                "page_size": {"type": "integer", "description": "Items per page (default 25, max 100)"},
+                "q": {"type": "string", "description": "Optional search query across ref, title, owner"},
+                "include_retired": {"type": "boolean", "description": "Include retired backlog tickets (default false)"},
                 "status": {"type": "string", "description": "Optional status filter (backlog, in-progress, verify, done, blocked)"}
             }
         }
     },
     {
         "name": "kanban_ticket",
-        "description": "Create, inspect, scaffold, or edit tickets. Use action='create' (or provide 'title') to create a backlog ticket; action='scaffold' to generate an agile DAG template; action='show' to inspect; action='edit' to update Outcome, Scope, Plan (Todo Tree), Prove, or full body.",
+        "description": "Create, inspect, edit, retire, restore, or rehome tickets.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["show", "create", "edit"],
+                    "enum": ["show", "create", "edit", "retire", "restore", "rehome"],
                     "description": "Explicit mode (recommended; inferred if unambiguous)"
                 },
                 "ref": {"type": "string", "description": "Ticket reference (e.g. web/auth/T001). Optional when creating if project and epic are provided."},
@@ -92,7 +97,12 @@ TOOLS = [
                 "plan": {"type": "string", "description": "Updated ## Plan (Todo Tree) DAG content (for action='edit' or 'create')"},
                 "prove": {"type": "string", "description": "Updated ## Prove content (for action='edit')"},
                 "body": {"type": "string", "description": "Full replacement markdown body (for action='edit')"},
-                "force": {"type": "boolean", "description": "Force edit even if ticket is in verify or done state", "default": False}
+                "force": {"type": "boolean", "description": "Force edit even if ticket is in verify or done state", "default": False},
+                "reason": {"type": "string", "description": "Reason for retiring ticket (min 5 chars, for action='retire')"},
+                "purge_after_days": {"type": "integer", "description": "Days before auto hard-delete when retired (default: 120)"},
+                "new_epic": {"type": "string", "description": "Target epic slug (for action='rehome')"},
+                "new_project": {"type": "string", "description": "Optional target project slug (for action='rehome')"},
+                "note": {"type": "string", "description": "Optional note (for action='retire' or 'restore')"}
             }
         }
     },
@@ -290,9 +300,30 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 text = f"Initialized Kanban board and project '{proj}' with epic '{ep}' at {board / proj}."
                 send_tool_result(req_id, text)
             elif view == "list":
-                tickets = kb.api_list(board, project, epic, status)
-                text = json.dumps(tickets, indent=2)
-                send_tool_result(req_id, text)
+                kb_crud.purge_expired_retired(board)
+                raw_tickets = kb.api_list(board, project, epic, status)
+                norm_tickets = []
+                for t in raw_tickets:
+                    parts = str(t.get("ref") or "").split("/")
+                    owner_val = t.get("owner")
+                    agent_str = owner_val.get("agent", "") if isinstance(owner_val, dict) else (owner_val or "")
+                    norm_tickets.append({
+                        **t,
+                        "project": parts[0] if len(parts) >= 1 else "",
+                        "epic": parts[1] if len(parts) >= 2 else "",
+                        "agent": agent_str,
+                    })
+                paged = kb_crud.paginate_items(
+                    norm_tickets,
+                    page=int(args.get("page") or 1),
+                    page_size=int(args.get("page_size") or 25),
+                    status=status,
+                    project=project,
+                    epic=epic,
+                    q=args.get("q"),
+                    include_retired=bool(args.get("include_retired", False)),
+                )
+                send_tool_result(req_id, json.dumps(paged, indent=2))
             elif view == "lint":
                 lint_res = kb.api_lint(board)
                 errors = lint_res.get("errors", [])
@@ -377,6 +408,20 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 force_edit = bool(args.get("force", False))
                 res = kb.api_ticket_edit(ref, board=board, force=force_edit, **edit_fields)
                 send_tool_result(req_id, f"Updated ticket {res['ref']} (status: {res['status']}).")
+            elif action == "retire":
+                res = kb_crud.api_retire(
+                    ref,
+                    str(args.get("reason") or args.get("note") or ""),
+                    board,
+                    int(args.get("purge_after_days") or 120),
+                )
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "restore":
+                res = kb_crud.api_restore(ref, board, str(args.get("note") or "Restored to active backlog"))
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "rehome":
+                res = kb_crud.api_rehome(ref, str(args.get("new_epic") or ""), board, args.get("new_project"))
+                send_tool_result(req_id, json.dumps(res, indent=2))
             else:
                 ticket = kb.api_show(ref, board)
                 text = f"Ticket: {ticket['ref']}\nStatus: {ticket['status']}\nTitle: {ticket['title']}\n"

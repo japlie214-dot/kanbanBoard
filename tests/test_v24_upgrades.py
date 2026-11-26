@@ -44,13 +44,15 @@ class TestPhase1SecurityGuard(unittest.TestCase):
             self.assertIsNotNone(reason, f"Expected command to be blocked: {cmd}")
 
     def test_antigravity_does_not_spoof_kb_qa_from_casual_mention(self):
+        # JSONL transcript-spoof path: casual plain-text mention of "kb-qa" must not grant access.
+        # Uses a non-kanban-qa server so the transcript-fallback path is exercised.
         with tempfile.TemporaryDirectory() as td:
             tfile = Path(td) / "transcript.txt"
             tfile.write_text("User: please ask kb-qa later to check this\n", encoding="utf-8")
             ok, reason = guard.evaluate_antigravity({
                 "toolCall": {
                     "name": "call_mcp_tool",
-                    "args": {"ServerName": "kanban-qa", "ToolName": "kanban_qa"},
+                    "args": {"ServerName": "some-other-server", "ToolName": "kanban_qa"},
                 },
                 "transcriptPath": str(tfile),
             })

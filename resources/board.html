@@ -25,6 +25,10 @@
         <input type="checkbox" id="f-swimlanes" />
         <span>Swimlanes</span>
       </label>
+      <label class="toggle-chip" title="Show retired backlog tickets (auto-purged after 120d)">
+        <input type="checkbox" id="f-showretired" />
+        <span>Retired</span>
+      </label>
       <label class="toggle-chip" title="Hide Done column">
         <input type="checkbox" id="f-hidedone" />
         <span>Hide Done</span>
@@ -76,6 +80,7 @@
         </div>
         <div class="drawer-actions">
           <button type="button" id="btn-drawer-approve" class="btn-review hidden">Approve →</button>
+          <button type="button" id="btn-drawer-retire" class="btn-ghost hidden">Retire</button>
           <button type="button" id="btn-copy-ref" class="btn-ghost">Copy Ref</button>
           <button type="button" id="btn-close-drawer" class="icon-btn" aria-label="Close drawer">✕</button>
         </div>
@@ -129,6 +134,8 @@
       </form>
     </div>
   </div>
+
+  <div id="kb-toast" class="kb-toast hidden" role="status" aria-live="polite"></div>
 
   <script src="/assets/board.js" defer></script>
 </body>

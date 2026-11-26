@@ -22,6 +22,7 @@ CORE_FILES = [
     "hooks/hooks.json",
     "scripts/install_qa_lock.py",
     "scripts/pre_commit_verify_done.py",
+    "scripts/wire_v26_crud.py",
     "README.md",
     "CLAUDE.md",
     "assets/logo.svg",
@@ -36,6 +37,7 @@ CORE_FILES = [
     "commands/kanban-status.md",
     "agents/kb-qa.md",
     "kb.py",
+    "kb_crud.py",
     "kb_ergonomics.py",
     "mcp_server.py",
     "viewer.py",
@@ -46,6 +48,7 @@ CORE_FILES = [
     "tests/test_qa_e2e_isolation.py",
     "tests/test_v24_upgrades.py",
     "tests/test_v25_upgrades.py",
+    "tests/test_v26_crud_and_guard.py",
 ]
 
 def collect_all_files():

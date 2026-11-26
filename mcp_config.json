@@ -3,10 +3,6 @@
     "kanban": {
       "command": "python",
       "args": ["${PLUGIN_ROOT}/mcp_server.py", "--mode", "work"]
-    },
-    "kanban-qa": {
-      "command": "python",
-      "args": ["${PLUGIN_ROOT}/mcp_server.py", "--mode", "qa"]
     }
   }
 }
