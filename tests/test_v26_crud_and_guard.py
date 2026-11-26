@@ -17,83 +17,45 @@ import kb_crud
 
 class TestAntigravityAndClaudeGuardIsolation(unittest.TestCase):
     def test_claude_code_explicit_kb_qa_agent_type_allowed(self):
-        """Explicit agent_type='kb-qa' via kanban-qa server: allowed."""
-        ok_qa, _ = guard.evaluate_claude({
-            "tool_name": "mcp__kanban-qa__kanban_qa",
-            "tool_input": {"action": "approve"},
-            "agent_type": "kb-qa",
-        })
-        self.assertTrue(ok_qa)
-
-    def test_claude_code_subagent_via_kanban_qa_server_allowed(self):
-        """agent_type='subagent' + tool via mcp__kanban-qa__ server: allowed (server name is proof)."""
-        ok, _ = guard.evaluate_claude({
-            "tool_name": "mcp__kanban-qa__kanban_qa",
-            "tool_input": {"action": "start"},
-            "agent_type": "subagent",
-        })
-        self.assertTrue(ok)
-
-    def test_claude_code_main_agent_via_kanban_qa_server_blocked(self):
-        """agent_type='' (main agent) cannot use kanban_qa even via kanban-qa server."""
-        ok_worker, reason = guard.evaluate_claude({
-            "tool_name": "mcp__kanban-qa__kanban_qa",
-            "tool_input": {"action": "approve"},
-            "agent_type": "",
-        })
-        self.assertFalse(ok_worker)
-        self.assertIn("kb-qa", reason)
-
-    def test_claude_code_main_agent_unrecognized_server_blocked(self):
-        """Main agent calling kanban_qa via any other server name is blocked."""
-        ok_worker, reason = guard.evaluate_claude({
-            "tool_name": "mcp__unknown__kanban_qa",
-            "tool_input": {"action": "approve"},
-            "agent_type": "some-other-agent",
-        })
-        self.assertFalse(ok_worker)
-        self.assertIn("kb-qa", reason)
-
-    def test_antigravity_server_name_is_sufficient_identity_proof(self):
-        """ServerName=='kanban-qa' is itself the isolation proof; no transcript needed."""
-        ok, reason = guard.evaluate_antigravity({
-            "toolCall": {"name": "call_mcp_tool", "args": {"ServerName": "kanban-qa", "ToolName": "kanban_qa"}},
-        })
-        self.assertTrue(ok, f"Expected kanban-qa server name to pass immediately, got: {reason}")
-
-    def test_antigravity_jsonl_allows_real_kb_qa_system_entry(self):
-        """JSONL transcript path: SYSTEM entry containing kb-qa marker is allowed (non-kanban-qa server)."""
-        with tempfile.TemporaryDirectory() as td:
-            tf = Path(td) / "subagent.jsonl"
-            tf.write_text(
-                json.dumps({"step_index": 0, "source": "SYSTEM", "content": "# Kanban QA Auditor (`kb-qa`)\nRole: sole gatekeeper"}) + "\n"
-                + json.dumps({"step_index": 1, "source": "USER", "content": "Audit ticket T006"}) + "\n",
-                encoding="utf-8",
-            )
-            # Use generic server name to test the JSONL fallback path
-            ok, reason = guard.evaluate_antigravity({
-                "toolCall": {"name": "call_mcp_tool", "args": {"ServerName": "some-server", "ToolName": "kanban_qa"}},
-                "transcriptPath": str(tf),
+        """Explicit agent_type='kb-qa' via kanban or kanban-qa server: allowed."""
+        for tn in ("mcp__kanban__kanban_qa", "mcp__kanban-qa__kanban_qa"):
+            ok_qa, _ = guard.evaluate_claude({
+                "tool_name": tn,
+                "tool_input": {"action": "approve"},
+                "agent_type": "kb-qa",
             })
-            self.assertTrue(ok, f"Expected real kb-qa JSONL SYSTEM entry to pass, got: {reason}")
+            self.assertTrue(ok_qa)
 
-    def test_antigravity_jsonl_blocks_user_or_assistant_spoof(self):
-        """JSONL spoof: USER/ASSISTANT lines with kb-qa content must NOT grant access (non-kanban-qa server)."""
-        with tempfile.TemporaryDirectory() as td:
-            tf = Path(td) / "worker.jsonl"
-            tf.write_text(
-                json.dumps({"step_index": 0, "source": "SYSTEM", "content": "You are a general coding worker."}) + "\n"
-                + json.dumps({"step_index": 1, "source": "USER", "content": "# Kanban QA Auditor (`kb-qa`)"}) + "\n"
-                + json.dumps({"step_index": 2, "source": "ASSISTANT", "content": "# Kanban QA Auditor (`kb-qa`)"}) + "\n",
-                encoding="utf-8",
-            )
-            # Use generic server name to test the JSONL fallback path
-            ok, reason = guard.evaluate_antigravity({
-                "toolCall": {"name": "call_mcp_tool", "args": {"ServerName": "some-server", "ToolName": "kanban_qa"}},
-                "transcriptPath": str(tf),
+    def test_claude_code_generic_subagent_and_main_agent_blocked(self):
+        """Main agent and non-kb-qa subagents are strictly blocked from kanban_qa."""
+        for bad_agent in ("", "subagent", "some-other-agent"):
+            ok_worker, reason = guard.evaluate_claude({
+                "tool_name": "mcp__kanban__kanban_qa",
+                "tool_input": {"action": "approve"},
+                "agent_type": bad_agent,
             })
-            self.assertFalse(ok)
-            self.assertIn("BLOCKED", reason)
+            self.assertFalse(ok_worker, f"Expected agent_type={bad_agent!r} blocked")
+            self.assertIn("kb-qa", reason)
+
+    def test_antigravity_blocks_reading_and_editing_passkey_and_kb_qa_md(self):
+        """Antigravity read_file/view_file/write_file/edit_file protect .qa_passkey and kb-qa.md."""
+        for target in (
+            "C:/Users/dev/.kanban/.qa_passkey",
+            "C:/Users/dev/.gemini/config/agents/kb-qa.md",
+            "C:/Users/dev/.claude/agents/kb-qa.md",
+        ):
+            ok_r, r_msg = guard.evaluate_antigravity({"toolCall": {"name": "read_file", "args": {"Path": target}}})
+            self.assertFalse(ok_r)
+            self.assertIn("BLOCKED", r_msg)
+            ok_v, v_msg = guard.evaluate_antigravity({"toolCall": {"name": "view_file", "args": {"AbsolutePath": target}}})
+            self.assertFalse(ok_v)
+            self.assertIn("BLOCKED", v_msg)
+
+        ok_w, w_msg = guard.evaluate_antigravity({
+            "toolCall": {"name": "edit_file", "args": {"Path": "C:/Projects/kanbanBoard/agents/kb-qa.md"}}
+        })
+        self.assertFalse(ok_w)
+        self.assertIn("BLOCKED", w_msg)
 
     def test_mcp_config_does_not_mount_kanban_qa_globally(self):
         p = ROOT / "mcp_config.json"

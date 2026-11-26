@@ -29,9 +29,10 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 import kb_crud
 import kb_ergonomics
+import kb_qa_otp
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "2.3.0"
+SERVER_VERSION = "2.7.0"
 _VIEWER_PORT: Optional[int] = None
 
 WORK_TOOL_NAMES = frozenset({
@@ -41,6 +42,7 @@ WORK_TOOL_NAMES = frozenset({
     "kanban_update",
     "kanban_doc",
     "kanban_view",
+    "kanban_qa",
 })
 
 QA_TOOL_NAMES = frozenset({
@@ -196,6 +198,7 @@ TOOLS = [
             "properties": {
                 "action": {"type": "string", "enum": ["start", "approve", "reject"], "description": "QA action to perform"},
                 "ref": {"type": "string", "description": "Ticket ref in 'verify' state"},
+                "qa_passkey": {"type": "string", "description": "Confidential single-use OTP from kb-qa system prompt (required)"},
                 "qa_nonce": {"type": "string", "description": "Ephemeral cryptographic nonce (required for approve/reject)"},
                 "evidence_path": {"type": "string", "description": "Path to QA evidence markdown report (required for approve, optional for reject)"},
                 "note": {"type": "string", "description": "Certification summary (approve) or failure reason (reject)"},
@@ -561,18 +564,34 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                     text += f"\nLocal loopback viewer already running on http://127.0.0.1:{_VIEWER_PORT}."
             send_tool_result(req_id, text, extra_result={"_meta": {"ui": {"resourceUri": "ui://kanban/board"}}})
 
-        # Tool 7: kanban_qa (--mode qa ONLY)
+        # Tool 7: kanban_qa (OTP-gated via auto-rotating qa_passkey)
         elif name == "kanban_qa":
+            otp = str(args.get("qa_passkey") or "").strip()
+            ok_otp, otp_err = kb_qa_otp.verify_passkey(otp)
+            if not ok_otp:
+                send_tool_result(req_id, otp_err, is_error=True)
+                return
+            if kb_qa_otp.contains_passkey_leak(str(args.get("note") or ""), otp):
+                send_tool_result(req_id, "FORBIDDEN: qa_passkey must never be echoed in note.", is_error=True)
+                return
             action = args["action"].lower()
             ref = args["ref"]
             workspace = args.get("workspace")
+            ev_arg = args.get("evidence_path")
+            if ev_arg:
+                ev_candidate = Path(ev_arg)
+                if not ev_candidate.is_absolute() and workspace:
+                    ev_candidate = Path(workspace) / ev_candidate
+                if ev_candidate.is_file() and kb_qa_otp.contains_passkey_leak(ev_candidate.read_text(encoding="utf-8", errors="ignore"), otp):
+                    send_tool_result(req_id, "FORBIDDEN: qa_passkey must never be echoed in evidence report.", is_error=True)
+                    return
             if action == "start":
                 res = kb.api_qa_start(ref, board)
                 text = json.dumps(res, indent=2)
                 send_tool_result(req_id, text)
             elif action == "approve":
                 qa_nonce = args.get("qa_nonce")
-                evidence_path = args.get("evidence_path")
+                evidence_path = ev_arg
                 note = args.get("note")
                 if not qa_nonce or not evidence_path or not note:
                     send_tool_result(req_id, "Error: action='approve' requires 'qa_nonce', 'evidence_path', and 'note'.", is_error=True)
@@ -595,7 +614,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
             elif action == "reject":
                 qa_nonce = args.get("qa_nonce")
                 note = args.get("note")
-                evidence_path = args.get("evidence_path")
+                evidence_path = ev_arg
                 if not qa_nonce or not note:
                     send_tool_result(req_id, "Error: action='reject' requires 'qa_nonce' and 'note'.", is_error=True)
                     return

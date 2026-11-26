@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""hooks/guard.py – Deterministic PreToolUse guard for Claude Code, Claude Desktop, and Antigravity.
+"""hooks/guard.py – Deterministic PreToolUse guard for Claude Code, Claude Desktop, and Antigravity (v2.7).
 
 Enforces three physical invariants:
-  1. Only the 'kb-qa' subagent may invoke any kanban_qa MCP tool (Claude Code / Desktop / Antigravity).
-  2. No agent may directly edit/write files inside the Kanban board directory, .qa_nonces, or .qa_secret.
-  3. No agent may use shell commands (Bash / run_command) to tamper with board/, .qa_nonces, .qa_secret,
-     launch mcp_server.py --mode qa, call kb.py qa/manual_approve, or spoof human approval on port 7890.
+  1. Claude Code / Desktop: only the 'kb-qa' subagent (`agent_type == "kb-qa"`) may invoke `kanban_qa`.
+  2. Both Claude & Antigravity: NO agent may read or modify protected Kanban paths (`board/`, `.qa_nonces`,
+     `.qa_secret`, `.qa_passkey`, or `kb-qa.md`), so only the host-spawned `kb-qa` subagent holds `QA_PASSKEY`.
+  3. No agent may use shell commands (`Bash` / `run_command`) to tamper with `board/`, secrets/passkeys,
+     `kb-qa.md`, `kb.py qa`, or spoof human approval on port `7890`.
 """
 from __future__ import annotations
 
@@ -21,6 +22,13 @@ PROTECTED_PATH_PATTERNS = [
     re.compile(r"(?:^|[\\/])\.kanban[\\/]board(?:[\\/]|$)", re.I),
     re.compile(r"(?:^|[\\/])\.qa_nonces(?:[\\/]|$)", re.I),
     re.compile(r"(?:^|[\\/])\.qa_secret$", re.I),
+    re.compile(r"(?:^|[\\/])\.qa_passkey$", re.I),
+    re.compile(r"(?:^|[\\/])agents[\\/]kb-qa\.md$", re.I),
+]
+
+PROTECTED_READ_PATTERNS = [
+    re.compile(r"(?:\.qa_nonces|\.qa_secret|\.qa_passkey)", re.I),
+    re.compile(r"(?:^|[\\/])agents[\\/]kb-qa\.md$", re.I),
 ]
 
 PROTECTED_CMD_PATTERNS = [
@@ -30,6 +38,9 @@ PROTECTED_CMD_PATTERNS = [
     (re.compile(r"(?:127\.0\.0\.1|localhost):789\d|manual[-_]?approve", re.I), "Calling the human web viewer approval endpoint via shell is forbidden."),
     (re.compile(r"\.qa_nonces\b", re.I), "Reading or modifying .qa_nonces via shell is forbidden."),
     (re.compile(r"\.qa_secret\b", re.I), "Reading or modifying .qa_secret via shell is forbidden."),
+    (re.compile(r"\.qa_passkey\b", re.I), "Reading or modifying .qa_passkey via shell is forbidden."),
+    (re.compile(r"\b(?:load_passkey|ensure_and_inject_passkey|rotate_passkey)\b", re.I), "Direct invocation of kb_qa_otp passkey helpers via shell is forbidden."),
+    (re.compile(r"kb-qa\.md\b", re.I), "Reading or modifying kb-qa.md via shell is forbidden (protects QA_PASSKEY OTP)."),
     (re.compile(r"(?:kanbanboard[\\/]board|\.kanban[\\/]board)", re.I), "Direct shell access to the centralized Kanban board directory is forbidden; use Kanban MCP tools."),
 ]
 
@@ -47,6 +58,13 @@ def is_protected_path(raw_path: str) -> bool:
     if extra and (norm.lower() == extra or norm.lower().startswith(extra + "/")):
         return True
     return any(p.search(norm) for p in PROTECTED_PATH_PATTERNS)
+
+
+def is_protected_read_path(raw_path: str) -> bool:
+    if not raw_path:
+        return False
+    norm = raw_path.replace("\\", "/")
+    return any(p.search(norm) for p in PROTECTED_READ_PATTERNS)
 
 
 def check_command(cmd: str) -> str | None:
@@ -67,16 +85,9 @@ def evaluate_claude(payload: dict) -> tuple[bool, str]:
     tool_input = payload.get("tool_input") or {}
     agent_type = str(payload.get("agent_type") or "").strip()
 
-    # Rule 1: Only kb-qa subagent may call kanban_qa
+    # Rule 1: Only kb-qa subagent may call kanban_qa (defense-in-depth alongside qa_passkey)
     if re.search(r"(?:^|__)kanban_qa$", tool_name):
-        # The MCP server name "kanban-qa" is itself the isolation proof: only the kb-qa subagent
-        # definition (agents/kb-qa.md) is wired to mcp_server.py --mode qa, so if the tool
-        # arrived via "mcp__kanban-qa__kanban_qa", the caller IS kb-qa by construction.
-        # Claude Code sends agent_type="subagent" (generic) for plugin subagents, not the
-        # specific name "kb-qa", so we accept both the explicit name and "subagent" via kanban-qa.
-        is_via_qa_server = "kanban-qa" in tool_name
-        is_kb_qa = agent_type in ("kb-qa", "subagent") and is_via_qa_server
-        if not is_kb_qa and agent_type != "kb-qa":
+        if agent_type != "kb-qa":
             caller = agent_type or "main-agent"
             return False, (
                 f"BLOCKED: '{tool_name}' is restricted exclusively to the 'kb-qa' subagent "
@@ -84,7 +95,7 @@ def evaluate_claude(payload: dict) -> tuple[bool, str]:
             )
         return True, ""
 
-    # Rule 2: Block direct file edits/reads on board/, .qa_nonces, .qa_secret
+    # Rule 2: Block direct file edits/reads on board/, secrets, passkey, and kb-qa.md
     if tool_name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}:
         target = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
         if is_protected_path(target):
@@ -95,8 +106,8 @@ def evaluate_claude(payload: dict) -> tuple[bool, str]:
 
     if tool_name == "Read":
         target = str(tool_input.get("file_path") or "")
-        if re.search(r"(?:\.qa_nonces|\.qa_secret)", target, re.I):
-            return False, f"BLOCKED: Reading QA secret/nonce path '{target}' is forbidden."
+        if is_protected_read_path(target):
+            return False, f"BLOCKED: Reading protected QA secret/agent path '{target}' is forbidden."
 
     # Rule 3: Block shell bypasses
     if tool_name == "Bash":
@@ -109,98 +120,35 @@ def evaluate_claude(payload: dict) -> tuple[bool, str]:
 
 
 def evaluate_antigravity(payload: dict) -> tuple[bool, str]:
-    """Evaluate an Antigravity PreToolUse hook payload."""
+    """Evaluate an Antigravity PreToolUse hook payload.
+
+    In v2.7, `kanban_qa` is enforced cryptographically inside `mcp_server.py` via the
+    auto-rotating 144-bit `qa_passkey` injected solely into `~/.gemini/config/agents/kb-qa.md`.
+    This hook guarantees no Antigravity agent can read `kb-qa.md`, `.qa_passkey`, `.qa_secret`,
+    `.qa_nonces`, or tamper with `board/` or port 7890.
+    """
     tc = payload.get("toolCall") or {}
     tool_name = str(tc.get("name") or "")
     args = tc.get("args") or {}
 
-    if tool_name in {"write_to_file", "replace_file_content", "multi_replace_file_content"}:
-        target = str(args.get("TargetFile") or "")
+    if tool_name in {"write_to_file", "replace_file_content", "multi_replace_file_content", "write_file", "edit_file"}:
+        target = str(args.get("TargetFile") or args.get("Path") or "")
         if is_protected_path(target):
             return False, (
                 f"BLOCKED: Direct file modification of '{target}' is forbidden. "
                 "Use Kanban MCP tools for ticket state changes."
             )
 
-    if tool_name == "view_file":
-        target = str(args.get("AbsolutePath") or "")
-        if re.search(r"(?:\.qa_nonces|\.qa_secret)", target, re.I):
-            return False, f"BLOCKED: Reading QA secret/nonce path '{target}' is forbidden."
+    if tool_name in {"view_file", "read_file"}:
+        target = str(args.get("AbsolutePath") or args.get("Path") or "")
+        if is_protected_read_path(target):
+            return False, f"BLOCKED: Reading protected QA secret/agent path '{target}' is forbidden."
 
     if tool_name == "run_command":
         cmd = str(args.get("CommandLine") or "")
         reason = check_command(cmd)
         if reason:
             return False, f"BLOCKED: {reason}"
-
-    if tool_name == "call_mcp_tool":
-        server_name = str(args.get("ServerName") or "")
-        mcp_tool = str(args.get("ToolName") or "")
-        if mcp_tool == "kanban_qa" or "kanban-qa" in server_name:
-            # "kanban-qa" ServerName is the physical isolation boundary: only the kb-qa
-            # agent definition is wired to mcp_server.py --mode qa. If the call arrived
-            # with ServerName=="kanban-qa", the caller IS kb-qa by construction.
-            if "kanban-qa" in server_name:
-                return True, ""
-            caller_type = (
-                payload.get("agent_type")
-                or payload.get("subagent_type")
-                or payload.get("caller")
-                or (payload.get("spec") or {}).get("typeName")
-                or ""
-            )
-            if not caller_type and os.environ.get("KANBAN_ANTIGRAVITY_ISOLATED_QA_MCP") == "1":
-                caller_type = "kb-qa"
-            if not caller_type and payload.get("transcriptPath"):
-                tpath = Path(payload["transcriptPath"])
-                if tpath.exists():
-                    try:
-                        with open(tpath, "r", encoding="utf-8", errors="ignore") as f:
-                            for _ in range(15):
-                                line = f.readline()
-                                if not line:
-                                    break
-                                s = line.strip()
-                                if not s:
-                                    continue
-                                if s.startswith("{"):
-                                    try:
-                                        obj = json.loads(s)
-                                    except Exception:
-                                        continue
-                                    # Inspect ONLY host-emitted SYSTEM entries (never USER/ASSISTANT text)
-                                    src = str(obj.get("source") or obj.get("role") or "").strip().upper()
-                                    if src != "SYSTEM":
-                                        continue
-                                    meta_name = str(obj.get("agentName") or obj.get("agent_type") or obj.get("subagent") or "").strip()
-                                    if meta_name == "kb-qa":
-                                        caller_type = "kb-qa"
-                                        break
-                                    content = obj.get("content") or obj.get("text") or obj.get("message") or ""
-                                    if isinstance(content, list):
-                                        content = " ".join(str(p.get("text") if isinstance(p, dict) else p) for p in content)
-                                    content_str = str(content)
-                                    if "# Kanban QA Auditor" in content_str or "name: kb-qa" in content_str:
-                                        caller_type = "kb-qa"
-                                        break
-                                elif s.startswith("# Kanban QA Auditor (`kb-qa`)"):
-                                    caller_type = "kb-qa"
-                                    break
-                    except Exception:
-                        pass
-            if caller_type != "kb-qa" and os.environ.get("KANBAN_GUARD_DEBUG") == "1":
-                try:
-                    dbg = Path.home() / ".kanban" / "guard_debug.log"
-                    dbg.parent.mkdir(parents=True, exist_ok=True)
-                    with open(dbg, "a", encoding="utf-8") as df:
-                        df.write(json.dumps({"keys": sorted(payload.keys()), "tool": mcp_tool, "server": server_name}) + "\n")
-                except Exception:
-                    pass
-            if caller_type != "kb-qa":
-                return False, (
-                    "BLOCKED: Direct invocation of kanban_qa by the main agent is forbidden. "
-                    "Only the independent kb-qa subagent may audit and approve tickets."
-                )
 
     return True, ""
 

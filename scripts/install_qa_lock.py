@@ -21,7 +21,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parent.parent.resolve()
+ROOT = Path(__file__).parent.parent.resolve()
+sys.path.insert(0, str(ROOT))
+import kb_qa_otp
+
+REPO_ROOT = ROOT
 MCP_SERVER = (REPO_ROOT / "mcp_server.py").resolve()
 GUARD_SCRIPT = (REPO_ROOT / "hooks" / "guard.py").resolve()
 KB_QA_TEMPLATE = REPO_ROOT / "agents" / "kb-qa.md"
@@ -48,7 +52,7 @@ def ensure_qa_secret() -> Path:
     return sec_file
 
 
-def render_kb_qa_agent(sec_file: Path) -> str:
+def render_kb_qa_agent(sec_file: Path, platform: str = "claude") -> str:
     text = KB_QA_TEMPLATE.read_text(encoding="utf-8")
     mcp_posix = MCP_SERVER.as_posix()
     text = text.replace("C:/Projects/kanbanBoard/mcp_server.py", mcp_posix)
@@ -59,19 +63,33 @@ def render_kb_qa_agent(sec_file: Path) -> str:
             '      KANBAN_REQUIRE_QA_SIGNATURE: "1"',
             f'      KANBAN_REQUIRE_QA_SIGNATURE: "1"\n      KANBAN_QA_SECRET_FILE: "{sec_file.as_posix()}"',
         )
+    if platform == "antigravity" and text.startswith("---\n"):
+        end_idx = text.find("\n---\n", 4)
+        if end_idx != -1:
+            body = text[end_idx + 5:]
+            agy_fm = (
+                "---\n"
+                "name: kb-qa\n"
+                'description: "Independent QA auditor. Run when ticket enters verify to run Ponytail diff audit, positive+negative discriminator tests, and certify done."\n'
+                "subagent: true\n"
+                "mainAgent: false\n"
+                "model: inherit\n"
+                "---\n"
+            )
+            return agy_fm + body
     return text
 
 
 def install_agents(sec_file: Path):
-    rendered = render_kb_qa_agent(sec_file)
     targets = [
-        Path.home() / ".claude" / "agents" / "kb-qa.md",
-        Path.home() / ".gemini" / "config" / "agents" / "kb-qa.md",
+        (Path.home() / ".claude" / "agents" / "kb-qa.md", "claude"),
+        (Path.home() / ".gemini" / "config" / "agents" / "kb-qa.md", "antigravity"),
     ]
-    for dst in targets:
+    for dst, plat in targets:
+        rendered = render_kb_qa_agent(sec_file, platform=plat)
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(rendered, encoding="utf-8", newline="\n")
-        print(f"[OK] Installed kb-qa subagent: {dst}")
+        print(f"[OK] Installed kb-qa subagent ({plat}): {dst}")
 
 
 def install_antigravity_hook():
@@ -91,7 +109,7 @@ def install_antigravity_hook():
         "enabled": True,
         "PreToolUse": [
             {
-                "matcher": "write_to_file|replace_file_content|multi_replace_file_content|view_file|run_command",
+                "matcher": "write_to_file|replace_file_content|multi_replace_file_content|view_file|read_file|write_file|edit_file|run_command|call_mcp_tool",
                 "hooks": [
                     {
                         "type": "command",
@@ -122,8 +140,18 @@ def install_git_hook(target_repo: Path):
     print(f"[OK] Installed git pre-commit hook: {dst}")
 
 
+def _sync_v27_passkey(force_rotate: bool = False):
+    _, updated = kb_qa_otp.ensure_and_inject_passkey(force_rotate=force_rotate)
+    print(f"[v2.7 OTP] qa_passkey synced into {len(updated)} kb-qa.md file(s) (secret redacted).")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Install KanbanBoard QA physical isolation lock")
+    parser.add_argument(
+        "--rotate-key",
+        action="store_true",
+        help="Force-rotate ~/.kanban/.qa_passkey and re-inject into kb-qa.md",
+    )
     parser.add_argument(
         "--install-git-hook",
         default=None,
@@ -137,6 +165,7 @@ def main():
     if args.install_git_hook:
         install_git_hook(Path(args.install_git_hook).resolve())
 
+    _sync_v27_passkey(force_rotate=getattr(args, "rotate_key", False))
     print("\nDone! Restart Claude Code / Claude Desktop / Antigravity to load the isolated kb-qa subagent and hooks.")
 
 

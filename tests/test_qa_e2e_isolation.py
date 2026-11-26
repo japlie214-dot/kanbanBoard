@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(ROOT))
 import kb
+import kb_qa_otp
 import mcp_server
 from hooks import guard
 
@@ -32,6 +33,16 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
         self.board = self.temp_dir / "board"
         self.workspace = self.temp_dir / "workspace"
         self.workspace.mkdir(parents=True)
+
+        # Isolate OTP passkey & agent target files inside temp_dir
+        self._old_passkey_file = os.environ.get("KANBAN_QA_PASSKEY_FILE")
+        self._old_agent_targets = os.environ.get("KANBAN_QA_AGENT_TARGETS")
+        self.passkey_file = self.temp_dir / ".qa_passkey"
+        self.agent_md = self.temp_dir / "kb-qa.md"
+        self.agent_md.write_text("---\nname: kb-qa\n---\nQA_PASSKEY: __QA_PASSKEY__\n", encoding="utf-8")
+        os.environ["KANBAN_QA_PASSKEY_FILE"] = str(self.passkey_file)
+        os.environ["KANBAN_QA_AGENT_TARGETS"] = str(self.agent_md)
+        self.passkey, _ = kb_qa_otp.ensure_and_inject_passkey()
 
         # Initialize git workspace
         subprocess.run(["git", "-C", str(self.workspace), "init", "-q"], check=True)
@@ -59,6 +70,14 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
         )
 
     def tearDown(self):
+        if self._old_passkey_file is None:
+            os.environ.pop("KANBAN_QA_PASSKEY_FILE", None)
+        else:
+            os.environ["KANBAN_QA_PASSKEY_FILE"] = self._old_passkey_file
+        if self._old_agent_targets is None:
+            os.environ.pop("KANBAN_QA_AGENT_TARGETS", None)
+        else:
+            os.environ["KANBAN_QA_AGENT_TARGETS"] = self._old_agent_targets
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_main_agent_cannot_move_to_done_via_kanban_move(self):
@@ -72,7 +91,7 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
         self.assertIn("Direct transition to 'done' is forbidden via kanban_move", str(ctx.exception))
 
     def test_main_agent_in_work_mode_cannot_call_kanban_qa(self):
-        """Main agent running mcp_server --mode work is physically blocked from kanban_qa."""
+        """Main agent in work mode without valid qa_passkey OTP is physically blocked from kanban_qa."""
         captured = []
         orig_send = mcp_server.send_response
         mcp_server.send_response = lambda r: captured.append(r)
@@ -84,10 +103,19 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
                 board=self.board,
                 mode="work"
             )
+            mcp_server.handle_tool_call(
+                req_id=2,
+                name="kanban_qa",
+                args={"action": "start", "ref": self.ref, "qa_passkey": "kbqa_forged_guess"},
+                board=self.board,
+                mode="work"
+            )
         finally:
             mcp_server.send_response = orig_send
         self.assertTrue(captured[0]["result"].get("isError"))
-        self.assertIn("not available in MCP server mode 'work'", captured[0]["result"]["content"][0]["text"])
+        self.assertIn("FORBIDDEN: missing 'qa_passkey'", captured[0]["result"]["content"][0]["text"])
+        self.assertTrue(captured[1]["result"].get("isError"))
+        self.assertIn("FORBIDDEN: invalid or already-rotated 'qa_passkey'", captured[1]["result"]["content"][0]["text"])
 
     def test_pre_tool_guard_blocks_main_agent_and_other_subagents(self):
         """PreToolUse hook blocks main agent and other subagents (e.g. Explore, Reviewer)."""
@@ -110,15 +138,15 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
             self.assertFalse(ok_sub, f"Expected {other_subagent} to be blocked")
             self.assertIn(f"caller='{other_subagent}'", reason_sub)
 
-        # Antigravity main agent toolCall guard
+        # Antigravity guard blocks reading .qa_passkey and kb-qa.md so main agent cannot steal OTP
         ok_agy, reason_agy = guard.evaluate_antigravity({
             "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {"ServerName": "kanban-board_kanban", "ToolName": "kanban_qa"}
+                "name": "read_file",
+                "args": {"Path": "C:/Users/dev/.gemini/config/agents/kb-qa.md"}
             }
         })
         self.assertFalse(ok_agy)
-        self.assertIn("Only the independent kb-qa subagent may audit and approve tickets", reason_agy)
+        self.assertIn("BLOCKED", reason_agy)
 
     def test_pre_tool_guard_allows_kb_qa_subagent(self):
         """PreToolUse hook explicitly ALLOWS the dedicated kb-qa subagent."""
@@ -161,7 +189,7 @@ class TestOnlyKbQaCanMoveTicketToDone(unittest.TestCase):
             mcp_server.handle_tool_call(
                 req_id=10,
                 name="kanban_qa",
-                args={"action": "start", "ref": self.ref},
+                args={"action": "start", "ref": self.ref, "qa_passkey": self.passkey},
                 board=self.board,
                 mode="qa"
             )
@@ -211,6 +239,7 @@ Verdict: PASS
                 args={
                     "action": "approve",
                     "ref": self.ref,
+                    "qa_passkey": self.passkey,
                     "qa_nonce": qa_nonce,
                     "evidence_path": str(ev_file),
                     "note": "Certified by kb-qa 4-tier audit",
@@ -225,6 +254,11 @@ Verdict: PASS
         self.assertFalse(captured_approve[0]["result"].get("isError"), f"Approval failed: {captured_approve}")
         app_text = captured_approve[0]["result"]["content"][0]["text"]
         self.assertIn("CERTIFIED BY QA", app_text)
+
+        # 6b. Verify static-per-install passkey remains valid for subsequent kb-qa runs in the same session
+        self.assertTrue(kb_qa_otp.verify_passkey(self.passkey)[0])
+        self.assertEqual(kb_qa_otp.load_passkey(), self.passkey)
+        self.assertIn(f"QA_PASSKEY: {self.passkey}", self.agent_md.read_text(encoding="utf-8"))
 
         # 7. Verify ticket status is now 'done'
         ticket_path = kb.resolve_ref(self.ref, self.board)
@@ -247,6 +281,7 @@ Verdict: PASS
                 args={
                     "action": "approve",
                     "ref": self.ref,
+                    "qa_passkey": self.passkey,
                     "qa_nonce": qa_nonce,
                     "evidence_path": str(ev_file),
                     "note": "Replay attack",

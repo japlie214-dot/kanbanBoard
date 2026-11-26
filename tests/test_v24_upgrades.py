@@ -43,21 +43,15 @@ class TestPhase1SecurityGuard(unittest.TestCase):
             reason = guard.check_command(cmd)
             self.assertIsNotNone(reason, f"Expected command to be blocked: {cmd}")
 
-    def test_antigravity_does_not_spoof_kb_qa_from_casual_mention(self):
-        # JSONL transcript-spoof path: casual plain-text mention of "kb-qa" must not grant access.
-        # Uses a non-kanban-qa server so the transcript-fallback path is exercised.
-        with tempfile.TemporaryDirectory() as td:
-            tfile = Path(td) / "transcript.txt"
-            tfile.write_text("User: please ask kb-qa later to check this\n", encoding="utf-8")
+    def test_antigravity_does_not_leak_passkey_via_file_or_shell(self):
+        # Antigravity PreToolUse blocks reading .qa_passkey and kb-qa.md via view_file, read_file, or run_command
+        for path in ["C:/Users/dev/.kanban/.qa_passkey", "C:/Users/dev/.gemini/config/agents/kb-qa.md"]:
             ok, reason = guard.evaluate_antigravity({
-                "toolCall": {
-                    "name": "call_mcp_tool",
-                    "args": {"ServerName": "some-other-server", "ToolName": "kanban_qa"},
-                },
-                "transcriptPath": str(tfile),
+                "toolCall": {"name": "read_file", "args": {"Path": path}}
             })
-            self.assertFalse(ok)
+            self.assertFalse(ok, f"Expected read_file blocked for {path}")
             self.assertIn("BLOCKED", reason)
+        self.assertIsNotNone(guard.check_command("type C:\\Users\\dev\\.kanban\\.qa_passkey"))
 
     def test_plugin_json_does_not_leak_kanban_qa(self):
         pj = ROOT / ".claude-plugin" / "plugin.json"

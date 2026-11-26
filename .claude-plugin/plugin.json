@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
   "name": "kanban-board",
-  "version": "2.6.0",
-  "description": "Kanban task tracking with dual-mode MCP isolation, PreToolUse hooks, native human web approval, and independent Haiku 5.5 kb-qa gating.",
+  "version": "2.7.0",
+  "description": "Kanban task tracking with prompt-injected OTP QA isolation, PreToolUse hooks, native human web approval, and independent Haiku 5.5 kb-qa gating.",
   "author": {
     "name": "kanbanBoard",
     "url": "https://github.com/kanbanBoard"

@@ -13,16 +13,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(ROOT))
+import kb_qa_otp
 import mcp_server
 from hooks import guard
 
 
 class TestDualModeMcp(unittest.TestCase):
-    def test_work_mode_omits_kanban_qa(self):
+    def test_work_mode_includes_otp_gated_kanban_qa(self):
         names = {t["name"] for t in mcp_server.tools_for_mode("work")}
-        self.assertNotIn("kanban_qa", names)
+        self.assertIn("kanban_qa", names)
         self.assertIn("kanban_move", names)
-        self.assertEqual(len(names), 6)
+        self.assertEqual(len(names), 7)
 
     def test_qa_mode_exposes_only_qa_and_readonly_tools(self):
         names = {t["name"] for t in mcp_server.tools_for_mode("qa")}
@@ -30,16 +31,25 @@ class TestDualModeMcp(unittest.TestCase):
         self.assertNotIn("kanban_move", names)
         self.assertNotIn("kanban_update", names)
 
-    def test_work_mode_rejects_kanban_qa_call(self):
+    def test_work_mode_rejects_kanban_qa_call_without_passkey(self):
         captured = []
         orig_send = mcp_server.send_response
         mcp_server.send_response = lambda r: captured.append(r)
-        try:
-            mcp_server.handle_tool_call(1, "kanban_qa", {"action": "start", "ref": "a/b/T001"}, Path("."), mode="work")
-        finally:
-            mcp_server.send_response = orig_send
+        with tempfile.TemporaryDirectory() as td:
+            old_pf = os.environ.get("KANBAN_QA_PASSKEY_FILE")
+            pf = Path(td) / ".qa_passkey"
+            pf.write_text("kbqa_expected_secret_key\n", encoding="utf-8")
+            os.environ["KANBAN_QA_PASSKEY_FILE"] = str(pf)
+            try:
+                mcp_server.handle_tool_call(1, "kanban_qa", {"action": "start", "ref": "a/b/T001"}, Path("."), mode="work")
+            finally:
+                mcp_server.send_response = orig_send
+                if old_pf is None:
+                    os.environ.pop("KANBAN_QA_PASSKEY_FILE", None)
+                else:
+                    os.environ["KANBAN_QA_PASSKEY_FILE"] = old_pf
         self.assertTrue(captured[0]["result"]["isError"])
-        self.assertIn("not available in MCP server mode 'work'", captured[0]["result"]["content"][0]["text"])
+        self.assertIn("FORBIDDEN", captured[0]["result"]["content"][0]["text"])
 
     def test_qa_mode_rejects_write_actions(self):
         captured = []
@@ -124,12 +134,21 @@ class TestPreToolUseGuard(unittest.TestCase):
 
         ok4, reason = guard.evaluate_antigravity({
             "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {"ServerName": "kanban-board_kanban", "ToolName": "kanban_qa"},
+                "name": "read_file",
+                "args": {"Path": "C:/Users/dev/.kanban/.qa_passkey"},
             }
         })
         self.assertFalse(ok4)
-        self.assertIn("Direct invocation of kanban_qa by the main agent is forbidden", reason)
+        self.assertIn("BLOCKED", reason)
+
+        ok5, reason5 = guard.evaluate_antigravity({
+            "toolCall": {
+                "name": "view_file",
+                "args": {"AbsolutePath": "C:/Users/dev/.gemini/config/agents/kb-qa.md"},
+            }
+        })
+        self.assertFalse(ok5)
+        self.assertIn("BLOCKED", reason5)
 
     def test_cli_exit_codes(self):
         payload = json.dumps({"tool_name": "mcp__kanban__kanban_qa", "tool_input": {"action": "start"}})

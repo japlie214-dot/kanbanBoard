@@ -69,3 +69,10 @@ Zero-config 1:1 agent addressing in Claude Desktop:
   - Wraps bearer token in `Arc<RwLock<String>>` + `token_path` so Boss can inspect, test, or rotate the live token without restarting the daemon.
 - **Unslop Boss Console (`web/index.html`)**:
   - Warm-graphite neutral theme with inline SVG icons (zero emojis), deterministic 12-hue agent colors, multi-line composer sizing fix, filter/sort selectors, initial deliveries load, and Token Management modal.
+
+## Antigravity CLI Hook Schema & JSON Notification Contract (T010)
+- **Antigravity Lifecycle Hook Schema (`hooks.json`, `src/hooks.rs`)**:
+  - Replaced unsupported `PreModelRequest` with Antigravity's flat `SessionStart` and `PreInvocation` handler contract.
+- **Input & Output Contract (`src/hooks.rs`)**:
+  - Parses camelCase `conversationId` and `workspacePaths[0]` alongside `session_id`/`cwd`.
+  - Emits Antigravity-compliant JSON `{ "injectSteps": [{ "systemMessage": { "systemMessage": "..." } }] }` when `runtime == "antigravity"` and unread items exist (or `{}` when idle), while keeping plain-text stdout for Claude Code and Codex.

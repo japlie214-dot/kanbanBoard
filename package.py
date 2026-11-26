@@ -39,8 +39,10 @@ CORE_FILES = [
     "kb.py",
     "kb_crud.py",
     "kb_ergonomics.py",
+    "kb_qa_otp.py",
     "mcp_server.py",
     "viewer.py",
+    "scripts/wire_v27_otp.py",
     "apps/Board.bat",
     "resources/board.html",
     "tests/test_kanban.py",
@@ -49,6 +51,7 @@ CORE_FILES = [
     "tests/test_v24_upgrades.py",
     "tests/test_v25_upgrades.py",
     "tests/test_v26_crud_and_guard.py",
+    "tests/test_v27_qa_otp.py",
 ]
 
 def collect_all_files():
