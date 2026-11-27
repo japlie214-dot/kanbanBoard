@@ -1,6 +1,6 @@
 {
   "name": "kanban-board",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Kanban task tracking with dual-mode MCP isolation, PreToolUse hooks, and independent kb-qa gating.",
   "logo": "assets/logo.svg",
   "author": {

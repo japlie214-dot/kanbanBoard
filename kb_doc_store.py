@@ -240,6 +240,9 @@ def upsert_section(
     version: str = "V0.0.0",
     source_tickets: Optional[list[str]] = None,
     order: Optional[int] = None,
+    parent_section: Optional[str] = None,
+    show_subtitle: Optional[str] = None,
+    show_companion_html: Optional[str] = None,
 ) -> dict[str, Any]:
     """Create or update a single containerized doc section cleanly."""
     clean_slug = validate_slug(slug)
@@ -258,6 +261,14 @@ def upsert_section(
     meta["slug"] = clean_slug
     meta["title"] = (title or meta.get("title") or clean_slug).strip()
     meta["summary"] = (summary if summary is not None else meta.get("summary", "")).strip()
+    if parent_section is not None:
+        meta["parent_section"] = (parent_section or "General").strip() or "General"
+    else:
+        meta.setdefault("parent_section", "General")
+    if show_subtitle is not None:
+        meta["show_subtitle"] = (show_subtitle or "").strip()
+    if show_companion_html is not None:
+        meta["show_companion_html"] = sanitize_tell_html(show_companion_html)
     if source_tickets is not None:
         meta["source_tickets"] = list(dict.fromkeys(str(t) for t in source_tickets))
     else:
@@ -288,6 +299,7 @@ def upsert_section(
         "slug": clean_slug,
         "title": meta["title"],
         "summary": meta["summary"],
+        "parent_section": meta["parent_section"],
         "order": order if order is not None else len(sections),
         "tell_version": meta.get("tell_version"),
         "tell_updated_at": meta.get("tell_updated_at"),
@@ -323,9 +335,11 @@ def read_section(board: Path, project: str, slug: str) -> dict[str, Any]:
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     tell_path = sec_dir / "tell.html"
     show_path = sec_dir / "show.js"
+    diag_path = sec_dir / "diagram.html"
     return {
         "meta": meta,
         "tell_html": tell_path.read_text(encoding="utf-8") if tell_path.is_file() else "",
+        "diagram_html": diag_path.read_text(encoding="utf-8") if diag_path.is_file() else "",
         "has_show": show_path.is_file(),
         "show_js": show_path.read_text(encoding="utf-8") if show_path.is_file() else "",
     }

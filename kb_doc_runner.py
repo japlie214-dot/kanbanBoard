@@ -31,7 +31,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import kb_doc_store
+import kb_doc_v401
 import kb_version
+
+REPO_ROOT = Path(__file__).resolve().parent
 
 CODEX_DISABLED_FEATURES = (
     "apps",
@@ -330,16 +333,19 @@ def build_tell_prompt(
         "current_manifest": manifest,
         "open_boss_feedback": open_fb,
     }
+    guide = kb_doc_v401.load_internal_prompt(REPO_ROOT, "tell")
+    header = f"{guide}\n\n---\n\n" if guide else ""
     return (
-        "You are kb-doc running in TELL mode for a containerized living documentation site.\n"
+        header
+        + "You are kb-doc running in TELL mode for a containerized living documentation site.\n"
         "Update ONLY the sections affected by this version bump (and address open Boss feedback).\n"
         "Return STRICT JSON ONLY with schema:\n"
-        '{"upsert_sections": [{"slug": "kebab-case", "title": "...", "summary": "...", '
-        '"order": 0, "source_tickets": ["proj/epic/T001"], "tell_html": "<article>...</article>"}], '
+        '{"upsert_sections": [{"slug": "kebab-case", "parent_section": "Subsystem", "title": "...", "summary": "...", '
+        '"order": 0, "source_tickets": ["proj/epic/T001"], "stack_diagram": null, "tell_html": "<article>...</article>"}], '
         '"delete_sections": ["old-slug"], '
         '"resolve_feedback": [{"id": "fb-xxxx", "resolution_note": "..."}], '
         '"overrides_css": null}\n'
-        "Rules: tell_html is a pure HTML fragment (no <script> tags, no inline event handlers). "
+        "Rules: tell_html is a pure HTML fragment (no <script> tags, no inline event handlers, no inline style= attributes). "
         "Be deeply technical for engineers, vary layout per section, and never repeat identical templates.\n\n"
         f"CONTEXT_BUNDLE:\n{json.dumps(bundle, indent=2, ensure_ascii=False)}\n"
     )
@@ -347,27 +353,20 @@ def build_tell_prompt(
 
 def build_show_prompt(board: Path, project: str, slug: str) -> str:
     """Build a read-only context bundle for on-demand Boss SHOW generation (480x270 2D retro Canvas)."""
-    sec = kb_doc_store.read_section(board, project, slug)
-    open_fb = [
-        fb for fb in kb_doc_store.list_feedback(board, project, status="open")
-        if fb.get("section") in (slug, "global")
-    ]
-    bundle = {
-        "mode": "SHOW",
-        "project": project,
-        "slug": slug,
-        "meta": sec["meta"],
-        "tell_html": sec["tell_html"],
-        "open_boss_feedback": open_fb,
-    }
+    bundle = kb_doc_v401.build_show_context_v401(board, project, slug)
+    guide = kb_doc_v401.load_internal_prompt(REPO_ROOT, "show")
+    header = f"{guide}\n\n---\n\n" if guide else ""
     return (
-        "You are kb-doc running in SHOW mode (Boss on-demand).\n"
+        header
+        + "You are kb-doc running in SHOW mode (Boss on-demand).\n"
         "Generate an interactive 2D Retro Widescreen Cinema (480x270) JavaScript module using "
         "window.CinemaEngine (integer-snapped flat sprites, 4x4 Bayer dithering, passive annotated "
         "animation loop by default + physical scrubbers ONLY where manipulation teaches, concrete "
         "real-world metaphors or mini-UI instead of abstract orbs).\n"
         "Return STRICT JSON ONLY with schema:\n"
         '{"show_js": "export function mountShow(container, engine, meta) { ... }", '
+        '"show_subtitle": "Short punchy subtitle", '
+        '"show_companion_html": "<p>Short companion takeaway.</p>", '
         '"resolve_feedback": [{"id": "fb-xxxx", "resolution_note": "..."}]}\n\n'
         f"CONTEXT_BUNDLE:\n{json.dumps(bundle, indent=2, ensure_ascii=False)}\n"
     )
@@ -391,6 +390,7 @@ def run_tell_update(
         payload, backend_used, fallback_used = _run_with_fallback(board, cfg, prompt, executor=executor)
         upserted: list[str] = []
         for sec in payload.get("upsert_sections") or []:
+            kb_doc_v401.snapshot_section(board, project, sec["slug"])
             meta = kb_doc_store.upsert_section(
                 board,
                 project,
@@ -401,7 +401,9 @@ def run_tell_update(
                 version=version,
                 source_tickets=sec.get("source_tickets", shipped_tickets),
                 order=sec.get("order"),
+                parent_section=sec.get("parent_section"),
             )
+            kb_doc_v401.apply_stack_diagram_if_present(board, project, meta["slug"], sec.get("stack_diagram"))
             upserted.append(meta["slug"])
 
         deleted: list[str] = []
@@ -471,6 +473,7 @@ def run_show_generate(
         show_js = str(payload.get("show_js") or "").strip()
         if not show_js:
             raise ValueError("kb-doc returned empty show_js.")
+        kb_doc_v401.snapshot_section(board, project, slug)
         kb_doc_store.upsert_section(
             board,
             project,
@@ -479,6 +482,8 @@ def run_show_generate(
             summary=sec["meta"].get("summary", ""),
             show_js=show_js,
             version=version,
+            show_subtitle=payload.get("show_subtitle"),
+            show_companion_html=payload.get("show_companion_html"),
         )
         resolved_fb: list[str] = []
         for fb in payload.get("resolve_feedback") or []:
@@ -517,3 +522,21 @@ def run_show_generate(
         }
         kb_doc_store.append_run_log(board, project, rec)
         return {"ok": False, **rec}
+
+
+def run_queued_job(
+    board: Path,
+    job: dict[str, Any],
+    executor: Optional[Callable[[dict[str, Any], int], tuple[int, str, str]]] = None,
+) -> dict[str, Any]:
+    """Execute a queued TELL or SHOW job from kb_doc_queue."""
+    mode = str(job.get("mode") or "").strip().lower()
+    project = str(job.get("project") or "").strip()
+    if mode == "tell":
+        version = str(job.get("version") or kb_version.load_version_state(board, project).get("version") or "V0.0.0")
+        shipped = list(job.get("shipped_tickets") or [])
+        return run_tell_update(board, project, version, shipped, executor=executor)
+    if mode == "show":
+        slug = str(job.get("slug") or "").strip()
+        return run_show_generate(board, project, slug, executor=executor)
+    return {"ok": False, "error": f"Unknown kb-doc job mode: {mode}"}

@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 import kb_cases
 import kb_crud
+import kb_doc_queue
 import kb_doc_runner
 import kb_doc_store
 import kb_ergonomics
@@ -38,7 +39,7 @@ import kb_qa_otp
 import kb_version
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "4.0.0"
+SERVER_VERSION = "4.0.1"
 _VIEWER_PORT: Optional[int] = None
 
 WORK_TOOL_NAMES = frozenset({
@@ -775,11 +776,15 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 cfg = kb_doc_store.load_effective_config(board, proj)
                 tell_queued = bool(args.get("run_doc", True) and cfg.get("auto_tell_on_bump", True))
                 if tell_queued:
-                    threading.Thread(
-                        target=kb_doc_runner.run_tell_update,
-                        args=(board, proj, res["new_version"], res["shipped_tickets"]),
-                        daemon=True,
-                    ).start()
+                    kb_doc_queue.start_background_worker(board, kb_doc_runner.run_queued_job)
+                    res["job"] = kb_doc_queue.enqueue_job(
+                        board,
+                        project=proj,
+                        mode="tell",
+                        version=res["new_version"],
+                        shipped_tickets=res["shipped_tickets"],
+                        reason="mcp_version_bump",
+                    )
                 res["tell_queued"] = tell_queued
                 send_tool_result(req_id, json.dumps(res, indent=2))
             elif action == "doc_config":

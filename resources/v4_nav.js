@@ -416,6 +416,10 @@
     }
   }
 
+  window.addEventListener("kb:open-ticket", () => {
+    switchView("board");
+  });
+
   window.addEventListener("DOMContentLoaded", () => {
     ensureShellMounted();
     loadProjects();

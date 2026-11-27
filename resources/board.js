@@ -840,10 +840,17 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.target.matches("input, textarea, select")) return;
+      const ws = document.querySelector("main.workspace");
+      if (ws && ws.classList.contains("hidden")) return;
       if (e.key === "/") { e.preventDefault(); $("f-q").focus(); }
       if (e.key === "t") { $("btn-theme").click(); }
       if (e.key === "r") { refreshBoard({ manual: true }); }
       if (e.key === "Escape") { closeApproveModal(); closeDetail(); }
+    });
+
+    window.addEventListener("kb:open-ticket", (e) => {
+      const ref = e && e.detail && e.detail.ref;
+      if (ref) openDetail(ref);
     });
   }
 

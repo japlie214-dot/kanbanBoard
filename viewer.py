@@ -9,7 +9,7 @@ Exposes:
   - GET /api/board        -> Board JSON (?summary=1 strips heavy bodies/docs for 10x scale)
   - GET /api/ticket?ref=  -> On-demand full ticket detail (body, dag_nodes, execution_log, docs)
   - GET /events           -> Server-Sent Events stream for live board updates
-  - GET /health           -> Health check {"ok": true, "mode": "viewer+human-approve", "version": "4.0.0"}
+  - GET /health           -> Health check {"ok": true, "mode": "viewer+human-approve", "version": "4.0.1"}
   - POST /api/ticket/manual-approve -> Human-only approval gated by CSRF, Origin, and native OS dialog
 """
 from __future__ import annotations
@@ -34,6 +34,9 @@ import kb_cases
 import kb_version
 import kb_doc_store
 import kb_doc_runner
+import kb_doc_queue
+import kb_doc_v401
+import kb_doc_export
 import kb_crud
 import kb_history
 
@@ -105,7 +108,7 @@ def board_stamp(board: Path) -> str:
     entries = []
     if board.exists():
         for root, dirs, files in os.walk(board):
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("_doc_sandbox", "_doc_home")]
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("_doc_sandbox", "_doc_home", "_doc_logo_cache")]
             for f in sorted(files):
                 if f.endswith(".md"):
                     p = Path(root) / f
@@ -285,7 +288,7 @@ class BoardCache:
 
 
 class KanbanHandler(BaseHTTPRequestHandler):
-    server_version = "KanbanViewer/4.0"
+    server_version = "KanbanViewer/4.0.1"
     sys_version = ""
     timeout = 15
 
@@ -411,7 +414,7 @@ class KanbanHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json(500, {"ok": False, "error": f"server error: {e}"}, False)
 
-        if path in ("/api/version/bump", "/api/doc/config", "/api/doc/feedback", "/api/doc/show/generate"):
+        if path in ("/api/version/bump", "/api/doc/config", "/api/doc/feedback", "/api/doc/show/generate", "/api/doc/tell/refresh", "/api/doc/revert", "/api/doc/queue/retry"):
             ctype = (self.headers.get("Content-Type") or "").lower()
             if not ctype.startswith("application/json"):
                 return self._json(415, {"ok": False, "error": "Content-Type must be application/json"}, False)
@@ -433,11 +436,14 @@ class KanbanHandler(BaseHTTPRequestHandler):
                     res = kb_version.bump_project_version(self.server.board, proj, ver, bumped_by=by, note=note)
                     cfg = kb_doc_store.load_effective_config(self.server.board, proj)
                     if cfg.get("auto_tell_on_bump", True):
-                        threading.Thread(
-                            target=kb_doc_runner.run_tell_update,
-                            args=(self.server.board, proj, res["new_version"], res["shipped_tickets"]),
-                            daemon=True,
-                        ).start()
+                        res["job"] = kb_doc_queue.enqueue_job(
+                            self.server.board,
+                            project=proj,
+                            mode="tell",
+                            version=res["new_version"],
+                            shipped_tickets=res["shipped_tickets"],
+                            reason="web_version_bump",
+                        )
                     return self._json(200, res, False)
                 if path == "/api/doc/config":
                     scope = str(payload.get("scope") or "global").strip().lower()
@@ -456,13 +462,33 @@ class KanbanHandler(BaseHTTPRequestHandler):
                         author=str(payload.get("author") or "Boss"),
                     )
                     return self._json(200, {"ok": True, "feedback": fb}, False)
+                if path == "/api/doc/tell/refresh":
+                    proj = str(payload.get("project") or "").strip()
+                    vstate = kb_version.load_version_state(self.server.board, proj)
+                    if vstate.get("version") == "V0.0.0":
+                        return self._json(400, {"ok": False, "error": "Bump version past V0.0.0 first."}, False)
+                    job = kb_doc_queue.enqueue_job(self.server.board, project=proj, mode="tell", version=vstate["version"], reason="boss_feedback_refresh")
+                    return self._json(202, {"ok": True, "job": job}, False)
+                if path == "/api/doc/revert":
+                    res = kb_doc_v401.revert_section(self.server.board, str(payload.get("project") or "").strip(), str(payload.get("slug") or "").strip(), payload.get("snapshot_id"))
+                    return self._json(200, res, False)
+                if path == "/api/doc/queue/retry":
+                    job = kb_doc_queue.retry_job_now(self.server.board, str(payload.get("job_id") or "").strip())
+                    if not job:
+                        return self._json(404, {"ok": False, "error": "job not found or not retryable"}, False)
+                    return self._json(200, {"ok": True, "job": job}, False)
                 if path == "/api/doc/show/generate":
-                    res = kb_doc_runner.run_show_generate(
+                    proj = str(payload.get("project") or "").strip()
+                    slug = str(payload.get("slug") or "").strip()
+                    kb_doc_store.read_section(self.server.board, proj, slug)
+                    job = kb_doc_queue.enqueue_job(
                         self.server.board,
-                        str(payload.get("project") or "").strip(),
-                        str(payload.get("slug") or "").strip(),
+                        project=proj,
+                        mode="show",
+                        slug=slug,
+                        reason="boss_show_generate",
                     )
-                    return self._json(200 if res.get("ok") else 500, res, False)
+                    return self._json(202, {"ok": True, "job": job}, False)
             except (ValueError, FileNotFoundError) as e:
                 return self._json(400, {"ok": False, "error": str(e)}, False)
             except Exception as e:
@@ -494,7 +520,7 @@ class KanbanHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "mode": "viewer+human-approve",
-                    "version": "4.0.0",
+                    "version": "4.0.1",
                     "port": self.server.server_address[1],
                 },
                 head,
@@ -564,6 +590,45 @@ class KanbanHandler(BaseHTTPRequestHandler):
                 "effective": kb_doc_store.load_effective_config(self.server.board, proj),
                 "runs": kb_doc_store.list_runs(self.server.board, proj) if proj else [],
             }, head)
+
+        if path == "/api/doc/status":
+            proj = (qs.get("project") or [""])[0].strip() or None
+            return self._json(200, kb_doc_queue.get_queue_status(self.server.board, project=proj), head)
+
+        if path == "/api/doc/snapshots":
+            proj = (qs.get("project") or [""])[0].strip()
+            slug = (qs.get("slug") or [""])[0].strip()
+            try:
+                return self._json(200, {"ok": True, "snapshots": kb_doc_v401.list_snapshots(self.server.board, proj, slug)}, head)
+            except ValueError as e:
+                return self._json(400, {"ok": False, "error": str(e)}, head)
+
+        if path == "/api/doc/export/print.css":
+            return self._send(200, kb_doc_export.FORMAL_PRINT_CSS.encode("utf-8"), "text/css; charset=utf-8", head)
+
+        if path == "/api/doc/export/html":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            html_doc = kb_doc_export.build_offline_html(self.server.board, proj)
+            return self._send(200, html_doc.encode("utf-8"), "text/html; charset=utf-8", head)
+
+        if path == "/api/doc/export/print-html":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            html_doc = kb_doc_export.build_formal_tell_print_html(self.server.board, proj, inline_css=False)
+            return self._send(200, html_doc.encode("utf-8"), "text/html; charset=utf-8", head)
+
+        if path == "/api/doc/export/pdf":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            res = kb_doc_export.export_tell_pdf(self.server.board, proj)
+            if res.get("ok"):
+                return self._send(200, Path(res["pdf_path"]).read_bytes(), "application/pdf", head)
+            html_doc = kb_doc_export.build_formal_tell_print_html(self.server.board, proj, inline_css=False)
+            return self._send(200, html_doc.encode("utf-8"), "text/html; charset=utf-8", head)
 
         if path == "/api/doc/manifest":
             proj = (qs.get("project") or [""])[0].strip()
@@ -652,10 +717,12 @@ class KanbanServer(ThreadingHTTPServer):
         self.closing = threading.Event()
         self.csrf_token = secrets.token_hex(24)
         self.cache = BoardCache(board)
+        kb_doc_queue.start_background_worker(board, kb_doc_runner.run_queued_job)
         super().__init__((HOST, port), KanbanHandler)
 
     def server_close(self):
         self.closing.set()
+        kb_doc_queue.stop_background_worker(timeout=1.5)
         try:
             self.shutdown()
         except Exception:
@@ -679,7 +746,7 @@ def find_available_server(board: Path, preferred_port: int = DEFAULT_PORT, max_a
 def run_server(board: Path, port: int = DEFAULT_PORT, open_browser: bool = True, verbose: bool = False):
     server, bound_port = find_available_server(board, port, verbose=verbose)
     url = f"http://{HOST}:{bound_port}"
-    print(f"Kanban Board Viewer v4.0 running at: {url}")
+    print(f"Kanban Board Viewer v4.0.1 running at: {url}")
     print("Press Ctrl+C to stop.")
 
     if open_browser:
