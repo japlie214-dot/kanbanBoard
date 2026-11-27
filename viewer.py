@@ -9,7 +9,7 @@ Exposes:
   - GET /api/board        -> Board JSON (?summary=1 strips heavy bodies/docs for 10x scale)
   - GET /api/ticket?ref=  -> On-demand full ticket detail (body, dag_nodes, execution_log, docs)
   - GET /events           -> Server-Sent Events stream for live board updates
-  - GET /health           -> Health check {"ok": true, "mode": "viewer+human-approve", "version": "2.6.0"}
+  - GET /health           -> Health check {"ok": true, "mode": "viewer+human-approve", "version": "4.0.0"}
   - POST /api/ticket/manual-approve -> Human-only approval gated by CSRF, Origin, and native OS dialog
 """
 from __future__ import annotations
@@ -31,6 +31,9 @@ from urllib.parse import parse_qs, urlsplit
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 import kb_cases
+import kb_version
+import kb_doc_store
+import kb_doc_runner
 import kb_crud
 import kb_history
 
@@ -102,7 +105,7 @@ def board_stamp(board: Path) -> str:
     entries = []
     if board.exists():
         for root, dirs, files in os.walk(board):
-            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("_doc_sandbox", "_doc_home")]
             for f in sorted(files):
                 if f.endswith(".md"):
                     p = Path(root) / f
@@ -282,7 +285,7 @@ class BoardCache:
 
 
 class KanbanHandler(BaseHTTPRequestHandler):
-    server_version = "KanbanViewer/3.0"
+    server_version = "KanbanViewer/4.0"
     sys_version = ""
     timeout = 15
 
@@ -408,6 +411,63 @@ class KanbanHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json(500, {"ok": False, "error": f"server error: {e}"}, False)
 
+        if path in ("/api/version/bump", "/api/doc/config", "/api/doc/feedback", "/api/doc/show/generate"):
+            ctype = (self.headers.get("Content-Type") or "").lower()
+            if not ctype.startswith("application/json"):
+                return self._json(415, {"ok": False, "error": "Content-Type must be application/json"}, False)
+            port = self.server.server_address[1]
+            origin = (self.headers.get("Origin") or "").strip()
+            if origin not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
+                return self._json(403, {"ok": False, "error": "forbidden: invalid Origin header"}, False)
+            token = (self.headers.get("X-Kanban-CSRF") or "").strip()
+            if not token or not hmac.compare_digest(token, self.server.csrf_token):
+                return self._json(403, {"ok": False, "error": "forbidden: invalid or missing CSRF token"}, False)
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if path == "/api/version/bump":
+                    proj = str(payload.get("project") or "").strip()
+                    ver = str(payload.get("version") or "").strip()
+                    by = str(payload.get("bumped_by") or "Boss").strip()
+                    note = str(payload.get("note") or "").strip()
+                    res = kb_version.bump_project_version(self.server.board, proj, ver, bumped_by=by, note=note)
+                    cfg = kb_doc_store.load_effective_config(self.server.board, proj)
+                    if cfg.get("auto_tell_on_bump", True):
+                        threading.Thread(
+                            target=kb_doc_runner.run_tell_update,
+                            args=(self.server.board, proj, res["new_version"], res["shipped_tickets"]),
+                            daemon=True,
+                        ).start()
+                    return self._json(200, res, False)
+                if path == "/api/doc/config":
+                    scope = str(payload.get("scope") or "global").strip().lower()
+                    patch = payload.get("config") or {}
+                    if scope == "project" and payload.get("project"):
+                        saved = kb_doc_store.save_project_config(self.server.board, str(payload["project"]), patch)
+                    else:
+                        saved = kb_doc_store.save_global_config(self.server.board, patch)
+                    return self._json(200, {"ok": True, "config": saved}, False)
+                if path == "/api/doc/feedback":
+                    fb = kb_doc_store.add_feedback(
+                        self.server.board,
+                        str(payload.get("project") or "").strip(),
+                        str(payload.get("text") or ""),
+                        section=str(payload.get("section") or "global"),
+                        author=str(payload.get("author") or "Boss"),
+                    )
+                    return self._json(200, {"ok": True, "feedback": fb}, False)
+                if path == "/api/doc/show/generate":
+                    res = kb_doc_runner.run_show_generate(
+                        self.server.board,
+                        str(payload.get("project") or "").strip(),
+                        str(payload.get("slug") or "").strip(),
+                    )
+                    return self._json(200 if res.get("ok") else 500, res, False)
+            except (ValueError, FileNotFoundError) as e:
+                return self._json(400, {"ok": False, "error": str(e)}, False)
+            except Exception as e:
+                return self._json(500, {"ok": False, "error": f"server error: {e}"}, False)
+
         return self._deny()
 
     def _handle(self, head: bool):
@@ -434,7 +494,7 @@ class KanbanHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "mode": "viewer+human-approve",
-                    "version": "3.0.0",
+                    "version": "4.0.0",
                     "port": self.server.server_address[1],
                 },
                 head,
@@ -474,6 +534,74 @@ class KanbanHandler(BaseHTTPRequestHandler):
             if not ref:
                 return self._json(400, {"ok": False, "error": "missing ref"}, head)
             return self._json(200, {"ok": True, "ref": ref, "history": kb_history.read_history(ref, self.server.board)}, head)
+
+        if path.startswith("/doc-shared/"):
+            fname = path[len("/doc-shared/"):].strip("/")
+            shared_root = (REPO_ROOT / "doc_shared").resolve()
+            shared_file = (shared_root / fname).resolve()
+            if shared_root not in shared_file.parents or not shared_file.is_file():
+                return self._json(404, {"ok": False, "error": "shared asset not found"}, head)
+            ctype = "text/css; charset=utf-8" if fname.endswith(".css") else ("application/javascript; charset=utf-8" if fname.endswith(".js") else "text/html; charset=utf-8")
+            return self._send(200, shared_file.read_bytes(), ctype, head)
+
+        if path in ("/assets/v4_nav.css", "/assets/v4_nav.js"):
+            fname = path[len("/assets/"):]
+            ctype = "text/css; charset=utf-8" if fname.endswith(".css") else "application/javascript; charset=utf-8"
+            return self._serve_file(REPO_ROOT / "resources" / fname, ctype, head)
+
+        if path == "/api/version/history":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            cfg = kb_doc_store.load_effective_config(self.server.board, proj)
+            return self._json(200, kb_version.get_version_history(self.server.board, proj, config=cfg), head)
+
+        if path == "/api/doc/config":
+            proj = (qs.get("project") or [""])[0].strip() or None
+            return self._json(200, {
+                "ok": True,
+                "global": kb_doc_store.load_global_config(self.server.board),
+                "effective": kb_doc_store.load_effective_config(self.server.board, proj),
+                "runs": kb_doc_store.list_runs(self.server.board, proj) if proj else [],
+            }, head)
+
+        if path == "/api/doc/manifest":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            return self._json(200, kb_doc_store.load_manifest(self.server.board, proj), head)
+
+        if path == "/api/doc/section":
+            proj = (qs.get("project") or [""])[0].strip()
+            slug = (qs.get("slug") or [""])[0].strip()
+            try:
+                return self._json(200, kb_doc_store.read_section(self.server.board, proj, slug), head)
+            except (FileNotFoundError, ValueError) as e:
+                return self._json(404, {"ok": False, "error": str(e)}, head)
+
+        if path == "/api/doc/show.js":
+            proj = (qs.get("project") or [""])[0].strip()
+            slug = (qs.get("slug") or [""])[0].strip()
+            try:
+                sec = kb_doc_store.read_section(self.server.board, proj, slug)
+                if not sec.get("has_show") or not sec.get("show_js"):
+                    return self._json(404, {"ok": False, "error": "SHOW module not generated"}, head)
+                return self._send(200, sec["show_js"].encode("utf-8"), "application/javascript; charset=utf-8", head)
+            except (FileNotFoundError, ValueError) as e:
+                return self._json(404, {"ok": False, "error": str(e)}, head)
+
+        if path == "/api/doc/overrides.css":
+            proj = (qs.get("project") or [""])[0].strip()
+            css = kb_doc_store.read_overrides_css(self.server.board, proj) if proj else ""
+            return self._send(200, css.encode("utf-8"), "text/css; charset=utf-8", head)
+
+        if path == "/api/doc/feedback":
+            proj = (qs.get("project") or [""])[0].strip()
+            if not proj:
+                return self._json(400, {"ok": False, "error": "missing project"}, head)
+            cfg = kb_doc_store.load_effective_config(self.server.board, proj)
+            kb_doc_store.purge_expired_feedback(self.server.board, proj, int(cfg.get("feedback_retention_days", 120)))
+            return self._json(200, {"ok": True, "feedback": kb_doc_store.list_feedback(self.server.board, proj)}, head)
 
         if path == "/api/ticket":
             ref = (qs.get("ref") or [""])[0].strip()
@@ -551,7 +679,7 @@ def find_available_server(board: Path, preferred_port: int = DEFAULT_PORT, max_a
 def run_server(board: Path, port: int = DEFAULT_PORT, open_browser: bool = True, verbose: bool = False):
     server, bound_port = find_available_server(board, port, verbose=verbose)
     url = f"http://{HOST}:{bound_port}"
-    print(f"Kanban Board Viewer v3.0 running at: {url}")
+    print(f"Kanban Board Viewer v4.0 running at: {url}")
     print("Press Ctrl+C to stop.")
 
     if open_browser:

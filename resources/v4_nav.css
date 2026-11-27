@@ -1,0 +1,175 @@
+/* resources/v4_nav.css — KanbanBoard v4.0 Top Menu Nav, Versions, Cases, Docs & Boss Config Control */
+.v4-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  background: var(--surface-2, #141821);
+  border-bottom: 1px solid var(--border, #262c3a);
+}
+
+.v4-nav-btn {
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.v4-nav-btn:hover {
+  color: var(--text, #e2e8f0);
+  background: rgba(255, 255, 255, 0.05);
+}
+.v4-nav-btn.active {
+  color: #0b1220;
+  background: #5eead4;
+}
+
+.v4-nav-spacer { flex: 1; }
+
+.v4-project-select {
+  background: var(--surface, #0f131b);
+  color: var(--text, #e2e8f0);
+  border: 1px solid var(--border, #262c3a);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.v4-version-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.14);
+  color: #5eead4;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+}
+
+.v4-view {
+  padding: 18px 20px;
+  max-width: 1380px;
+  margin: 0 auto;
+  color: var(--text, #e2e8f0);
+}
+.v4-view.hidden { display: none !important; }
+
+.v4-card {
+  background: var(--surface-2, #151923);
+  border: 1px solid var(--border, #262c3a);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.v4-card h3 { margin: 0 0 10px 0; font-size: 15px; }
+
+.v4-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.v4-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.v4-field label { color: var(--muted, #94a3b8); font-weight: 600; }
+.v4-field input, .v4-field select, .v4-field textarea {
+  background: var(--surface, #0d1017);
+  color: var(--text, #e2e8f0);
+  border: 1px solid var(--border, #262c3a);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.v4-btn {
+  background: #5eead4;
+  color: #0b1220;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.v4-btn.secondary {
+  background: transparent;
+  color: var(--text, #e2e8f0);
+  border: 1px solid var(--border, #262c3a);
+}
+.v4-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.v4-ticket-chip {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.14);
+  margin: 2px 4px 2px 0;
+}
+
+.v4-status-msg {
+  font-size: 12px;
+  margin-top: 8px;
+  color: #5eead4;
+}
+.v4-status-msg.err { color: #f87171; }
+
+.v4-muted { color: var(--muted, #94a3b8); }
+.v4-muted-sm { color: var(--muted, #94a3b8); font-size: 12px; }
+.v4-meta-line { font-size: 12px; color: var(--muted, #94a3b8); margin-top: 4px; }
+.v4-summary-line { font-size: 13px; margin-bottom: 8px; }
+.v4-note-line { margin-top: 4px; font-size: 13px; }
+.v4-chips-row { margin-top: 6px; }
+.v4-history-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v4-checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 10px 0; }
+
+.v4-row-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--border, #262c3a);
+}
+
+.v4-case-btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+.v4-case-detail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: rgba(15, 19, 27, 0.65);
+  border: 1px solid var(--border, #262c3a);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
+.v4-case-detail.hidden { display: none; }
+
+.v4-cluster-box {
+  padding: 8px;
+  border: 1px solid var(--border, #262c3a);
+  border-radius: 7px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.v4-run-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--border, #262c3a);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.v4-run-err { color: #f87171; }

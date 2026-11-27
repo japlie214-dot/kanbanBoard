@@ -1,0 +1,220 @@
+/* doc_shared/base.css
+ * Universal starter stylesheet for KanbanBoard v4.0 living docs.
+ * Starting point, never a cage — per-project overrides.css loads after this file.
+ */
+:root {
+  --doc-bg: #0f1117;
+  --doc-surface: #171b24;
+  --doc-border: #272e3f;
+  --doc-text: #e6eaf2;
+  --doc-muted: #93a0b8;
+  --doc-accent: #5eead4;
+  --doc-warn: #fbbf24;
+  --doc-danger: #f87171;
+  --doc-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --doc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.kb-doc-standalone {
+  margin: 0;
+  padding: 20px;
+  background: var(--doc-bg);
+}
+
+.kb-doc-root {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  color: var(--doc-text);
+  font-family: var(--doc-font);
+  min-height: 520px;
+}
+
+.kb-doc-sidebar {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-doc-sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.kb-doc-nav-item {
+  text-align: left;
+  background: transparent;
+  color: var(--doc-text);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.kb-doc-nav-item:hover { background: rgba(255,255,255,0.04); }
+.kb-doc-nav-item.active {
+  background: rgba(94, 234, 212, 0.12);
+  border-color: rgba(94, 234, 212, 0.45);
+}
+
+.kb-doc-main {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kb-doc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-bottom: 1px solid var(--doc-border);
+  padding-bottom: 12px;
+}
+
+.kb-doc-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kb-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.kb-mode-toggle button {
+  background: transparent;
+  color: var(--doc-muted);
+  border: none;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.kb-mode-toggle button.active {
+  background: var(--doc-accent);
+  color: #0b1220;
+}
+
+.kb-doc-empty-note {
+  color: var(--doc-muted);
+}
+
+.kb-doc-show-placeholder {
+  padding: 18px;
+  border: 1px dashed var(--doc-border);
+  border-radius: 8px;
+  color: var(--doc-muted);
+}
+
+.kb-doc-fb-panel {
+  border-top: 1px solid var(--doc-border);
+  padding-top: 12px;
+}
+.kb-doc-fb-panel.hidden { display: none; }
+.kb-doc-fb-title { margin: 0 0 8px 0; }
+.kb-doc-fb-row { display: flex; gap: 8px; }
+.kb-doc-fb-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: #0b0e14;
+  color: var(--doc-text);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+}
+.kb-doc-fb-list { margin-top: 8px; }
+.kb-doc-fb-item {
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.kb-doc-fb-text { margin-top: 4px; }
+.kb-doc-fb-resolution { margin-top: 4px; color: var(--doc-muted); }
+.kb-doc-muted-inline { color: var(--doc-muted); font-size: 12px; }
+
+.kb-doc-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--doc-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--doc-muted);
+  font-family: var(--doc-mono);
+}
+
+.kb-doc-error {
+  border: 1px solid var(--doc-danger);
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #fecaca;
+  font-size: 13px;
+}
+
+.cinema-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cinema-canvas {
+  width: 100%;
+  max-width: 960px;
+  aspect-ratio: 16 / 9;
+  image-rendering: pixelated;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: #0a0d14;
+}
+.cinema-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--doc-muted);
+}
+.cinema-btn {
+  background: #1f2937;
+  color: var(--doc-text);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.cinema-scrubber { display: inline-flex; align-items: center; gap: 6px; }
+.cinema-caption { margin-left: auto; font-family: var(--doc-mono); }
+
+.kb-doc-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-family: var(--doc-mono);
+  background: rgba(94, 234, 212, 0.14);
+  color: var(--doc-accent);
+}
+.kb-doc-badge.warn {
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--doc-warn);
+}

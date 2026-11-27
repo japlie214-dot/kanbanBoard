@@ -23,8 +23,9 @@ class TestDualModeMcp(unittest.TestCase):
         names = {t["name"] for t in mcp_server.tools_for_mode("work")}
         self.assertIn("kanban_qa", names)
         self.assertIn("kanban_case", names)
+        self.assertIn("kanban_project", names)
         self.assertIn("kanban_move", names)
-        self.assertEqual(len(names), 8)
+        self.assertEqual(len(names), 9)
 
     def test_qa_mode_exposes_only_qa_case_and_readonly_tools(self):
         names = {t["name"] for t in mcp_server.tools_for_mode("qa")}

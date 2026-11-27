@@ -21,6 +21,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -29,12 +30,15 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
 import kb_cases
 import kb_crud
+import kb_doc_runner
+import kb_doc_store
 import kb_ergonomics
 import kb_history
 import kb_qa_otp
+import kb_version
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "3.0.0"
+SERVER_VERSION = "4.0.0"
 _VIEWER_PORT: Optional[int] = None
 
 WORK_TOOL_NAMES = frozenset({
@@ -46,6 +50,7 @@ WORK_TOOL_NAMES = frozenset({
     "kanban_view",
     "kanban_qa",
     "kanban_case",
+    "kanban_project",
 })
 
 QA_TOOL_NAMES = frozenset({
@@ -236,6 +241,28 @@ TOOLS = [
             },
             "required": ["action"]
         }
+    },
+    {
+        "name": "kanban_project",
+        "description": "Project-level SemVer (V0.0.0, n-1 ticket accounting), disjoint pending-done cluster history, and living doc (kb-doc) Boss configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["version_history", "bump_version", "doc_config"],
+                    "description": "Project action to execute"
+                },
+                "project": {"type": "string", "description": "Project slug"},
+                "version": {"type": "string", "description": "Strictly increasing SemVer string (e.g. V1.0.0) for action='bump_version'"},
+                "bumped_by": {"type": "string", "description": "Actor name recording the version bump (default: agent)"},
+                "note": {"type": "string", "description": "Optional release note for version bump"},
+                "run_doc": {"type": "boolean", "description": "Auto-queue kb-doc TELL run on bump when configured (default: true)", "default": True},
+                "scope": {"type": "string", "enum": ["global", "project"], "description": "Config scope for action='doc_config'"},
+                "config": {"type": "object", "description": "Optional Boss config fields to update for action='doc_config'"}
+            },
+            "required": ["action"]
+        }
     }
 ]
 
@@ -359,6 +386,11 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                     q=args.get("q"),
                     include_retired=bool(args.get("include_retired", False)),
                 )
+                if mode != "qa" and project and (board / project).is_dir():
+                    cfg = kb_doc_store.load_effective_config(board, project)
+                    nudge = kb_version.evaluate_version_nudge(board, project, config=cfg)
+                    if nudge:
+                        paged["version_nudge"] = nudge
                 send_tool_result(req_id, json.dumps(paged, indent=2))
             elif view == "lint":
                 lint_res = kb.api_lint(board)
@@ -381,6 +413,14 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
             else:
                 # Default: overview
                 res = kb.api_overview(board, project, epic)
+                if mode != "qa":
+                    for p_entry in res.get("projects") or []:
+                        p_slug = p_entry.get("slug")
+                        if p_slug:
+                            cfg = kb_doc_store.load_effective_config(board, p_slug)
+                            nudge = kb_version.evaluate_version_nudge(board, p_slug, config=cfg)
+                            if nudge:
+                                p_entry["version_nudge"] = nudge
                 text = json.dumps(res, indent=2)
                 send_tool_result(req_id, text)
 
@@ -704,6 +744,61 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 send_tool_result(req_id, json.dumps(res, indent=2))
             else:
                 send_tool_result(req_id, f"Unknown kanban_case action: {action}. Must be 'create', 'reply', 'show', 'list', or 'archive'.", is_error=True)
+
+        # Tool 9: kanban_project
+        elif name == "kanban_project":
+            action = (args.get("action") or "").strip().lower()
+            proj = str(args.get("project") or "").strip()
+            if action == "version_history":
+                if not proj:
+                    send_tool_result(req_id, "Error: 'project' is required for action='version_history'.", is_error=True)
+                    return
+                cfg = kb_doc_store.load_effective_config(board, proj)
+                res = kb_version.get_version_history(board, proj, config=cfg)
+                if mode != "qa":
+                    nudge = kb_version.evaluate_version_nudge(board, proj, config=cfg, record_nudge=False)
+                    if nudge:
+                        res["version_nudge"] = nudge
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "bump_version":
+                ver = str(args.get("version") or "").strip()
+                if not proj or not ver:
+                    send_tool_result(req_id, "Error: 'project' and 'version' are required for action='bump_version'.", is_error=True)
+                    return
+                res = kb_version.bump_project_version(
+                    board,
+                    proj,
+                    ver,
+                    bumped_by=str(args.get("bumped_by") or "agent"),
+                    note=str(args.get("note") or ""),
+                )
+                cfg = kb_doc_store.load_effective_config(board, proj)
+                tell_queued = bool(args.get("run_doc", True) and cfg.get("auto_tell_on_bump", True))
+                if tell_queued:
+                    threading.Thread(
+                        target=kb_doc_runner.run_tell_update,
+                        args=(board, proj, res["new_version"], res["shipped_tickets"]),
+                        daemon=True,
+                    ).start()
+                res["tell_queued"] = tell_queued
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "doc_config":
+                patch = args.get("config")
+                scope = str(args.get("scope") or ("project" if proj else "global")).strip().lower()
+                if isinstance(patch, dict):
+                    if scope == "project" and proj:
+                        kb_doc_store.save_project_config(board, proj, patch)
+                    else:
+                        kb_doc_store.save_global_config(board, patch)
+                out = {
+                    "ok": True,
+                    "global": kb_doc_store.load_global_config(board),
+                    "effective": kb_doc_store.load_effective_config(board, proj or None),
+                    "runs": kb_doc_store.list_runs(board, proj) if proj else [],
+                }
+                send_tool_result(req_id, json.dumps(out, indent=2))
+            else:
+                send_tool_result(req_id, f"Unknown kanban_project action: {action}. Must be 'version_history', 'bump_version', or 'doc_config'.", is_error=True)
 
         else:
             send_tool_result(req_id, f"Unknown tool: {name}", is_error=True)

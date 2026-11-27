@@ -29,6 +29,7 @@ CORE_FILES = [
     "rules/AGENTS.md",
     "skills/kanban/SKILL.md",
     "skills/kanban/DAG-SYNTAX.md",
+    "skills/kanban-doc/SKILL.md",
     ".claude-plugin/plugin.json",
     "commands/kanban-init.md",
     "commands/kanban-move.md",
@@ -39,15 +40,19 @@ CORE_FILES = [
     "kb.py",
     "kb_cases.py",
     "kb_crud.py",
+    "kb_doc_runner.py",
+    "kb_doc_store.py",
     "kb_ergonomics.py",
     "kb_history.py",
     "kb_qa_otp.py",
     "kb_repo_id.py",
+    "kb_version.py",
     "mcp_server.py",
     "viewer.py",
     "scripts/migrate_in_progress_to_build.py",
     "scripts/wire_v27_otp.py",
     "scripts/wire_v3.py",
+    "scripts/wire_v4.py",
     "apps/Board.bat",
     "resources/board.html",
     "tests/test_kanban.py",
@@ -58,6 +63,7 @@ CORE_FILES = [
     "tests/test_v26_crud_and_guard.py",
     "tests/test_v27_qa_otp.py",
     "tests/test_v3_cases_history_and_build.py",
+    "tests/test_v4_version_doc_and_runner.py",
 ]
 
 def collect_all_files():
@@ -72,6 +78,15 @@ def collect_all_files():
             if rel not in files:
                 files.append(rel)
                 
+    # Include doc_shared runtime files
+    doc_shared_dir = ROOT / "doc_shared"
+    if doc_shared_dir.exists():
+        for p in sorted(doc_shared_dir.glob("*")):
+            if p.is_file():
+                rel = p.relative_to(ROOT).as_posix()
+                if rel not in files:
+                    files.append(rel)
+
     # Include resources if any
     res_dir = ROOT / "resources"
     if res_dir.exists():
