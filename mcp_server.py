@@ -27,12 +27,14 @@ from typing import Any, Optional
 # Add project root to path to import kb
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
+import kb_cases
 import kb_crud
 import kb_ergonomics
+import kb_history
 import kb_qa_otp
 
 SERVER_NAME = "kanban"
-SERVER_VERSION = "2.7.0"
+SERVER_VERSION = "3.0.0"
 _VIEWER_PORT: Optional[int] = None
 
 WORK_TOOL_NAMES = frozenset({
@@ -43,12 +45,14 @@ WORK_TOOL_NAMES = frozenset({
     "kanban_doc",
     "kanban_view",
     "kanban_qa",
+    "kanban_case",
 })
 
 QA_TOOL_NAMES = frozenset({
     "kanban_board",
     "kanban_ticket",
     "kanban_qa",
+    "kanban_case",
 })
 
 TOOLS = [
@@ -70,7 +74,7 @@ TOOLS = [
                 "page_size": {"type": "integer", "description": "Items per page (default 25, max 100)"},
                 "q": {"type": "string", "description": "Optional search query across ref, title, owner"},
                 "include_retired": {"type": "boolean", "description": "Include retired backlog tickets (default false)"},
-                "status": {"type": "string", "description": "Optional status filter (backlog, in-progress, verify, done, blocked)"}
+                "status": {"type": "string", "description": "Optional status filter (backlog, build, verify, done, blocked; 'in-progress' aliases to 'build')"}
             }
         }
     },
@@ -110,18 +114,18 @@ TOOLS = [
     },
     {
         "name": "kanban_move",
-        "description": "Move a ticket between backlog, in-progress, verify, and blocked. Moving to 'in-progress' atomically claims ownership with a 60-minute lease. Moving to 'verify' enforces the 5 Anti-Laziness Gates (Git modifications, unbroken DAG path, Prove command). NOTE: 'done' is strictly forbidden here (only kb-qa approves to done via kanban-qa MCP).",
+        "description": "Move a ticket between backlog, build, verify, and blocked ('in-progress' accepted as alias for 'build'). Moving to 'build' atomically claims ownership with a 60-minute lease. Moving to 'verify' enforces the 5 Anti-Laziness Gates (Git modifications, unbroken DAG path, Prove command). NOTE: 'done' is strictly forbidden here (only kb-qa approves to done via kanban_qa).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "ref": {"type": "string", "description": "Ticket ref (e.g. web/auth/T001)"},
                 "status": {
                     "type": "string",
-                    "enum": ["backlog", "in-progress", "verify", "blocked"],
-                    "description": "Target status. NOTE: 'done' is forbidden via this tool."
+                    "enum": ["backlog", "build", "in-progress", "verify", "blocked"],
+                    "description": "Target status ('build' preferred; 'in-progress' aliases to 'build'). NOTE: 'done' is forbidden via this tool."
                 },
                 "note": {"type": "string", "description": "Note (required when moving to blocked)"},
-                "agent_id": {"type": "string", "description": "Agent identifier claiming ticket on in-progress"},
+                "agent_id": {"type": "string", "description": "Agent identifier claiming ticket on build"},
                 "session_id": {"type": "string", "description": "Optional session/conversation ID"},
                 "lease_minutes": {"type": "integer", "description": "Lease duration in minutes (default: 60)"},
                 "force": {"type": "boolean", "description": "Force takeover if ticket is held by another agent"},
@@ -205,6 +209,32 @@ TOOLS = [
                 "workspace": {"type": "string", "description": "Optional target repository root for resolving relative evidence_path"}
             },
             "required": ["action", "ref"]
+        }
+    },
+    {
+        "name": "kanban_case",
+        "description": "Ticket-linked Case threads (board/_cases/): post QA verdicts, discoveries, discussions, bugs, or decisions linked to 1..100 tickets across projects/epics, reply with attachments, inspect/list Cases, or archive done >=180d Cases.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["create", "reply", "show", "list", "archive"], "description": "Case action to perform"},
+                "title": {"type": "string", "description": "Case title (min 3 chars, for action='create')"},
+                "tickets": {"type": "array", "items": {"type": "string"}, "description": "1..100 linked ticket refs (for action='create')"},
+                "body": {"type": "string", "description": "Markdown post/reply content"},
+                "kind": {"type": "string", "enum": ["qa", "discovery", "discussion", "bug", "decision"], "description": "Case category (default: 'qa')"},
+                "author": {"type": "string", "description": "Author name (e.g. 'kb-qa', agent id)"},
+                "attachments": {"type": "array", "items": {"type": "string"}, "description": "Optional file paths to copy into _cases/attachments/<cid>/"},
+                "case_id": {"type": "string", "description": "Case ID (e.g. C001, for reply/show)"},
+                "ticket": {"type": "string", "description": "Filter Cases by ticket ref (action='list')"},
+                "project": {"type": "string", "description": "Filter Cases by project slug (action='list')"},
+                "epic": {"type": "string", "description": "Filter Cases by epic slug (action='list')"},
+                "page": {"type": "integer", "description": "1-based page number (default 1)"},
+                "page_size": {"type": "integer", "description": "Page size (default 20, max 100)"},
+                "max_done_days": {"type": "integer", "description": "Archive threshold in days (default 180)"},
+                "dry_run": {"type": "boolean", "description": "Preview archive without moving files"},
+                "force": {"type": "boolean", "description": "Bypass hourly throttle for archive"}
+            },
+            "required": ["action"]
         }
     }
 ]
@@ -304,7 +334,9 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 send_tool_result(req_id, text)
             elif view == "list":
                 kb_crud.purge_expired_retired(board)
-                raw_tickets = kb.api_list(board, project, epic, status)
+                kb_cases.archive_stale_cases(board)
+                norm_status = kb.normalize_status(status) if status else None
+                raw_tickets = kb.api_list(board, project, epic, norm_status)
                 norm_tickets = []
                 for t in raw_tickets:
                     parts = str(t.get("ref") or "").split("/")
@@ -312,6 +344,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                     agent_str = owner_val.get("agent", "") if isinstance(owner_val, dict) else (owner_val or "")
                     norm_tickets.append({
                         **t,
+                        "status": kb.normalize_status(str(t.get("status") or "backlog")),
                         "project": parts[0] if len(parts) >= 1 else "",
                         "epic": parts[1] if len(parts) >= 2 else "",
                         "agent": agent_str,
@@ -320,7 +353,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                     norm_tickets,
                     page=int(args.get("page") or 1),
                     page_size=int(args.get("page_size") or 25),
-                    status=status,
+                    status=norm_status,
                     project=project,
                     epic=epic,
                     q=args.get("q"),
@@ -405,7 +438,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 plan_custom = args.get("plan")
                 res = kb.api_create(ref, title, board, pattern=pattern, plan=plan_custom)
                 text = f"Created ticket {res['ref']} in backlog [{res['path']}] with pattern '{pattern}'\n"
-                text += "Use kanban_ticket(action='edit', ref=..., outcome=..., scope=..., plan=..., prove=...) before moving to in-progress."
+                text += "Use kanban_ticket(action='edit', ref=..., outcome=..., scope=..., plan=..., prove=...) before moving to build."
                 send_tool_result(req_id, text)
             elif action == "edit":
                 force_edit = bool(args.get("force", False))
@@ -544,7 +577,7 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
             counts = {}
             for t in tickets:
                 counts[t["status"]] = counts.get(t["status"], 0) + 1
-            summary_parts = [f"{st}: {counts.get(st, 0)}" for st in ["backlog", "in-progress", "verify", "done", "blocked"]]
+            summary_parts = [f"{st}: {counts.get(st, 0)}" for st in ["backlog", "build", "verify", "done", "blocked"]]
             text = f"Kanban Board Overview ({len(tickets)} tickets):\n" + " | ".join(summary_parts) + "\n\n"
             text += "Interactive view-only UI rendered via resource ui://kanban/board."
             if open_browser:
@@ -623,6 +656,54 @@ def handle_tool_call(req_id: Any, name: str, args: dict, board: Path, mode: str 
                 send_tool_result(req_id, text)
             else:
                 send_tool_result(req_id, f"Unknown kanban_qa action: {action}. Must be 'start', 'approve', or 'reject'.", is_error=True)
+
+        # Tool 8: kanban_case
+        elif name == "kanban_case":
+            action = (args.get("action") or "").strip().lower()
+            if action == "create":
+                res = kb_cases.api_case_create(
+                    title=str(args.get("title") or ""),
+                    tickets=list(args.get("tickets") or []),
+                    body=str(args.get("body") or ""),
+                    board=board,
+                    kind=str(args.get("kind") or "qa"),
+                    author=str(args.get("author") or "agent"),
+                    attachments=args.get("attachments"),
+                )
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "reply":
+                res = kb_cases.api_case_reply(
+                    case_id=str(args.get("case_id") or ""),
+                    author=str(args.get("author") or "agent"),
+                    body=str(args.get("body") or ""),
+                    board=board,
+                    attachments=args.get("attachments"),
+                )
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "show":
+                res = kb_cases.api_case_show(str(args.get("case_id") or ""), board)
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "list":
+                res = kb_cases.api_case_list(
+                    board,
+                    ticket=args.get("ticket"),
+                    project=args.get("project"),
+                    epic=args.get("epic"),
+                    kind=args.get("kind"),
+                    page=int(args.get("page") or 1),
+                    page_size=int(args.get("page_size") or 20),
+                )
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            elif action == "archive":
+                res = kb_cases.archive_stale_cases(
+                    board,
+                    max_done_days=int(args.get("max_done_days") or kb_cases.DEFAULT_ARCHIVE_DONE_DAYS),
+                    dry_run=bool(args.get("dry_run", False)),
+                    force=bool(args.get("force", False)),
+                )
+                send_tool_result(req_id, json.dumps(res, indent=2))
+            else:
+                send_tool_result(req_id, f"Unknown kanban_case action: {action}. Must be 'create', 'reply', 'show', 'list', or 'archive'.", is_error=True)
 
         else:
             send_tool_result(req_id, f"Unknown tool: {name}", is_error=True)

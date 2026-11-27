@@ -21,6 +21,7 @@ import datetime
 import hashlib
 import hmac
 import kb_ergonomics
+import kb_history
 import json
 import os
 import re
@@ -37,18 +38,23 @@ ATTACHMENTS_DIR_NAME = "attachments"
 LOCK_TIMEOUT = 10.0
 DEFAULT_LEASE_MINUTES = 60
 
-VALID_STATUSES = {"backlog", "in-progress", "verify", "done", "blocked"}
+def normalize_status(s: str) -> str:
+    v = (s or "").strip().lower()
+    return "build" if v == "in-progress" else v
+
+
+VALID_STATUSES = {"backlog", "build", "verify", "done", "blocked"}
 
 ALLOWED_TRANSITIONS = {
-    "backlog": {"in-progress", "blocked"},
-    "in-progress": {"verify", "blocked", "backlog"},
-    "verify": {"done", "in-progress", "blocked", "backlog"},
-    "blocked": {"backlog", "in-progress", "verify"},
+    "backlog": {"build", "blocked"},
+    "build": {"verify", "blocked", "backlog"},
+    "verify": {"done", "build", "blocked", "backlog"},
+    "blocked": {"backlog", "build", "verify"},
     "done": set(),
 }
 
 REQUIRED_SECTIONS = {"Outcome", "Scope", "Prove"}
-GATE_STATUSES = {"in-progress", "verify"}
+GATE_STATUSES = {"build", "verify"}
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TICKET_ID_RE = re.compile(r"^T[0-9]{3,}$")
@@ -63,6 +69,11 @@ PRIVATE_PARTS = frozenset({
 PRIVATE_SUFFIXES = (
     ".pem", ".key", ".p12", ".pfx", ".kdbx", ".keychain", ".crt", ".cer", ".env"
 )
+
+
+def is_system_dir(path: Path) -> bool:
+    """Return True for hidden or internal board directories such as '.history' and '_cases'."""
+    return path.name.startswith(".") or path.name.startswith("_")
 
 
 # ---------------------------------------------------------------------------
@@ -697,8 +708,8 @@ def validate_todo_tree(
             return False, "Todo Tree must define at least 2 distinct checkpoints."
         for n in nodes:
             if n["is_acceptance"] and n["checked"]:
-                return False, "Cannot enter 'in-progress' with [ACCEPTANCE] criteria already checked (- [x])."
-        return True, "Valid DAG plan for in-progress."
+                return False, "Cannot enter 'build' with [ACCEPTANCE] criteria already checked (- [x])."
+        return True, "Valid DAG plan for build."
 
     if for_verify:
         # 5. Enforce mutually exclusive if/else groups (cannot execute both if and else of the same fork)
@@ -962,17 +973,17 @@ def resolve_ref(ref: str, board: Path) -> Path:
     if len(parts) == 3:
         project, epic, tid = parts
     elif len(parts) == 2:
-        projects = [d for d in board.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        projects = [d for d in board.iterdir() if d.is_dir() and not is_system_dir(d)]
         if len(projects) == 1:
             project = projects[0].name
         else:
             raise ValueError(f"Ambiguous ref '{ref}': specify project/epic/Tnnn")
         epic, tid = parts
     elif len(parts) == 1:
-        projects = [d for d in board.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        projects = [d for d in board.iterdir() if d.is_dir() and not is_system_dir(d)]
         if len(projects) == 1:
             project = projects[0].name
-            epics = [d for d in (board / project).iterdir() if d.is_dir() and not d.name.startswith('.')]
+            epics = [d for d in (board / project).iterdir() if d.is_dir() and not is_system_dir(d)]
             if len(epics) == 1:
                 epic = epics[0].name
             else:
@@ -1175,7 +1186,7 @@ def api_move(
     qa_signature: Optional[str] = None,
     qa_evidence_sha256: Optional[str] = None,
 ) -> dict:
-    new_status = new_status.lower()
+    new_status = normalize_status(new_status)
     if new_status not in VALID_STATUSES:
         raise ValueError(f"Unknown status '{new_status}'. Valid: {', '.join(sorted(VALID_STATUSES))}")
 
@@ -1193,7 +1204,7 @@ def api_move(
     with board_lock(board):
         text = path.read_text(encoding="utf-8")
         meta, body = parse_frontmatter(text)
-        cur = meta.get("status", "backlog")
+        cur = normalize_status(meta.get("status", "backlog"))
 
         if cur == new_status:
             raise ValueError(f"Ticket is already '{new_status}'. Same-status move is not allowed.")
@@ -1203,32 +1214,32 @@ def api_move(
             raise ValueError(
                 f"Transition '{cur}' -> '{new_status}' is not allowed.\n"
                 f"  Allowed from '{cur}': {', '.join(sorted(allowed))}\n"
-                f"  Lifecycle: backlog -> in-progress -> verify -> done (with blocked)"
+                f"  Lifecycle: backlog -> build -> verify -> done (with blocked)"
             )
 
         now = datetime.datetime.now(datetime.timezone.utc)
         cur_owner = meta.get("owner")
 
         # Auto-restore if claiming a retired ticket back to active work
-        if new_status == "in-progress" and meta.get("retired"):
+        if new_status == "build" and meta.get("retired"):
             for _rkey in ("retired", "retired_at", "retire_reason", "purge_after_days"):
                 meta.pop(_rkey, None)
 
-        # Gate 1: Non-trivial plan and atomic claim when moving to in-progress
-        if new_status == "in-progress" and not caller_is_qa:
+        # Gate 1: Non-trivial plan and atomic claim when moving to build
+        if new_status == "build" and not caller_is_qa:
             missing = check_required_sections(body, REQUIRED_SECTIONS)
             if missing:
                 raise ValueError(
-                    f"Cannot move to 'in-progress': required sections missing or empty: {', '.join(missing)}"
+                    f"Cannot move to 'build': required sections missing or empty: {', '.join(missing)}"
                 )
 
             # Validate Todo Tree
             nodes, tree_err = parse_todo_tree(body)
             if tree_err:
-                raise ValueError(f"Cannot move to 'in-progress': {tree_err}")
+                raise ValueError(f"Cannot move to 'build': {tree_err}")
             is_valid, reason_msg = validate_todo_tree(nodes, for_inprogress=(cur == "backlog"), body=body)
             if not is_valid:
-                raise ValueError(f"Cannot move to 'in-progress': {reason_msg}")
+                raise ValueError(f"Cannot move to 'build': {reason_msg}")
 
             # Check existing lease & ownership
             is_active, lease_desc = inspect_ticket_lease(cur_owner)
@@ -1251,7 +1262,7 @@ def api_move(
                 "claimed_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "lease_expires": lease_exp.strftime("%Y-%m-%dT%H:%M:%SZ")
             }
-        elif new_status == "in-progress" and caller_is_qa:
+        elif new_status == "build" and caller_is_qa:
             # QA rejection: clear kb-qa claim so workers can re-claim and address findings
             meta["owner"] = None
 
@@ -1282,8 +1293,8 @@ def api_move(
                         "Pass workspace=<repo_path> if editing a different repo, and do not commit before kb-qa approval."
                     )
 
-                # Smart auto-population if exactly 1 ticket in-progress
-                active_tickets = [t for t in api_list(board, status="in-progress") if t["ref"] != ref]
+                # Smart auto-population if exactly 1 ticket in build
+                active_tickets = [t for t in api_list(board, status="build") if t["ref"] != ref]
                 if not active_tickets and uncommitted:
                     # Single active ticket: auto-merge uncommitted files into ticket
                     merged_files = sorted(set(declared_files + uncommitted))
@@ -1320,6 +1331,28 @@ def api_move(
         path.write_text(render_frontmatter(meta, body), encoding="utf-8")
 
     fref = full_ref(path, board)
+    try:
+        actor = (
+            "kb-qa"
+            if caller_is_qa
+            else (agent_id or (meta.get("owner") or {}).get("agent") if isinstance(meta.get("owner"), dict) else None) or "agent"
+        )
+        nodes_hist, _ = parse_todo_tree(body)
+        done_hist = len([n for n in nodes_hist if n["status"] == "done"]) if nodes_hist else 0
+        prog_hist = f"{done_hist}/{len(nodes_hist)}" if nodes_hist else ""
+        kb_history.record_transition(
+            fref,
+            cur,
+            new_status,
+            actor=actor,
+            board=board,
+            note=note,
+            todo_progress=prog_hist,
+            files=meta.get("files"),
+            body=body,
+        )
+    except Exception:
+        pass
     res = {
         "ref": fref,
         "from": cur,
@@ -1570,7 +1603,7 @@ def api_ticket_edit(
         if meta.get("status") in {"verify", "done"} and not force:
             raise PermissionError(
                 f"Cannot edit a '{meta.get('status')}' ticket. "
-                "Tickets in 'verify' are frozen for kb-qa; reject back to 'in-progress' first or pass force=True."
+                "Tickets in 'verify' are frozen for kb-qa; reject back to 'build' first or pass force=True."
             )
 
         if body is not None:
@@ -1719,7 +1752,7 @@ def api_overview(board: Path, project: Optional[str] = None, epic: Optional[str]
         return overview
 
     for proj_dir in sorted(board.iterdir()):
-        if not proj_dir.is_dir() or proj_dir.name.startswith("."):
+        if not proj_dir.is_dir() or is_system_dir(proj_dir):
             continue
         p_slug = proj_dir.name
         if project and p_slug != project:
@@ -1736,7 +1769,7 @@ def api_overview(board: Path, project: Optional[str] = None, epic: Optional[str]
 
         epics_list = []
         for epic_dir in sorted(proj_dir.iterdir()):
-            if not epic_dir.is_dir() or epic_dir.name.startswith("."):
+            if not epic_dir.is_dir() or is_system_dir(epic_dir):
                 continue
             e_slug = epic_dir.name
             if epic and e_slug != epic:
@@ -1856,11 +1889,11 @@ def api_qa_approve(
     # Substantive content check on evidence report with flexible regex matching
     ev_text = ev_p.read_text(encoding="utf-8")
     required_patterns = [
-        (re.compile(r"process\s*(?:&|and)?\s*checkpoint(?:\s*execution)?\s*audit", re.I), "Process & Checkpoint Audit"),
-        (re.compile(r"(?:minimal\s*)?diff(?:\s*review)?", re.I), "Diff Review"),
-        (re.compile(r"living\s*architecture", re.I), "Living Architecture"),
-        (re.compile(r"positive\s*tests?", re.I), "Positive Tests"),
-        (re.compile(r"negative\s*(?:discriminator)?\s*(?:tests?|verification)", re.I), "Negative Discriminator Tests"),
+        (re.compile(r"(?:process\s*(?:&|and)?\s*checkpoint(?:\s*execution)?\s*audit|testing\s*ladder|ponytail\s*diff)", re.I), "Process / Diff / Testing Ladder"),
+        (re.compile(r"(?:(?:minimal\s*)?diff(?:\s*review)?|ponytail\s*diff)", re.I), "Diff Review"),
+        (re.compile(r"(?:living\s*architecture|ponytail\s*diff|testing\s*ladder|advisory\s*notes)", re.I), "Living Architecture / Ponytail Notes"),
+        (re.compile(r"(?:positive\s*(?:tests?|(?:\+|and)\s*pluto)|testing\s*ladder)", re.I), "Positive Tests"),
+        (re.compile(r"(?:negative\s*(?:discriminator)?\s*(?:tests?|verification)|pluto(?:\s*witness)?)", re.I), "Negative / Pluto Discriminator Tests"),
         (re.compile(r"\bPASS\b", re.I), "PASS verdict"),
     ]
     for pat, label in required_patterns:
@@ -1927,6 +1960,15 @@ def api_qa_approve(
     return res
 
 
+def _uncheck_mandatory_acceptance(path: Path) -> int:
+    text = path.read_text(encoding="utf-8")
+    pat = re.compile(r"^(\s*-\s*\[)[xX](\]\s*[^\n]*\[ACCEPTANCE:MANDATORY\])", re.M)
+    new_text, count = pat.subn(r"\g<1> \g<2>", text)
+    if count:
+        path.write_text(new_text, encoding="utf-8", newline="\n")
+    return count
+
+
 def api_qa_reject(
     ref: str,
     nonce: str,
@@ -1934,7 +1976,7 @@ def api_qa_reject(
     board: Path,
     evidence_path: Optional[str] = None,
 ) -> dict:
-    """Symmetric QA rejection: burns nonce, records failure reason, returns ticket to in-progress."""
+    """Symmetric QA rejection: burns nonce, unchecks mandatory acceptance, records failure reason, returns ticket to build."""
     path = resolve_ref(ref, board)
     if not path.exists():
         raise FileNotFoundError(f"Ticket not found: {ref}")
@@ -1949,7 +1991,8 @@ def api_qa_reject(
     full_note = f"[QA REJECTED] {note.strip()}"
     if evidence_path:
         full_note += f" (evidence: {evidence_path})"
-    res = api_move(ref, new_status="in-progress", note=full_note, board=board, caller_is_qa=True)
+    _uncheck_mandatory_acceptance(path)
+    res = api_move(ref, new_status="build", note=full_note, board=board, caller_is_qa=True)
     burn_qa_nonce(path, board)
     if evidence_path:
         res["evidence"] = evidence_path
@@ -2058,14 +2101,16 @@ def api_list(
     if not board.exists():
         return tickets
 
+    if status:
+        status = normalize_status(status)
     for p_dir in sorted(board.iterdir()):
-        if not p_dir.is_dir() or p_dir.name.startswith('.'):
+        if not p_dir.is_dir() or is_system_dir(p_dir):
             continue
         p_name = p_dir.name
         if project and p_name != project:
             continue
         for e_dir in sorted(p_dir.iterdir()):
-            if not e_dir.is_dir() or e_dir.name.startswith('.'):
+            if not e_dir.is_dir() or is_system_dir(e_dir):
                 continue
             e_name = e_dir.name
             if epic and e_name != epic:
@@ -2074,7 +2119,7 @@ def api_list(
                 if not TICKET_ID_RE.match(f.stem):
                     continue
                 meta, _ = parse_frontmatter(f.read_text(encoding="utf-8"))
-                st = meta.get("status", "backlog")
+                st = normalize_status(meta.get("status", "backlog"))
                 if status and st != status:
                     continue
                 is_rejected = bool(meta.get("note") and "[QA REJECTED]" in str(meta.get("note")))
@@ -2117,7 +2162,7 @@ def api_lint(board: Path) -> dict:
     all_tickets = set()
     ticket_depends = {}
 
-    project_dirs = [p for p in sorted(board.iterdir()) if p.is_dir() and not p.name.startswith('.')]
+    project_dirs = [p for p in sorted(board.iterdir()) if p.is_dir() and not is_system_dir(p)]
     if not project_dirs:
         return {
             "errors": [],
@@ -2125,12 +2170,12 @@ def api_lint(board: Path) -> dict:
         }
 
     for p_dir in project_dirs:
-        if not p_dir.is_dir() or p_dir.name.startswith('.'):
+        if not p_dir.is_dir() or is_system_dir(p_dir):
             continue
         if not (p_dir / "project.md").exists():
             errors.append(f"{p_dir.name}/: missing project.md")
         for e_dir in sorted(p_dir.iterdir()):
-            if not e_dir.is_dir() or e_dir.name.startswith('.'):
+            if not e_dir.is_dir() or is_system_dir(e_dir):
                 continue
             if not (e_dir / "epic.md").exists():
                 errors.append(f"{p_dir.name}/{e_dir.name}/: missing epic.md")
@@ -2174,7 +2219,7 @@ def api_board_payload(board: Path) -> dict:
     projects = []
     if board.exists():
         for proj_dir in sorted(board.iterdir()):
-            if not proj_dir.is_dir() or proj_dir.name.startswith('.'):
+            if not proj_dir.is_dir() or is_system_dir(proj_dir):
                 continue
             proj_name = proj_dir.name
             proj_meta = {}
@@ -2191,7 +2236,7 @@ def api_board_payload(board: Path) -> dict:
             epics = []
             proj_tickets = []
             for epic_dir in sorted(proj_dir.iterdir()):
-                if not epic_dir.is_dir() or epic_dir.name.startswith('.'):
+                if not epic_dir.is_dir() or is_system_dir(epic_dir):
                     continue
                 epic_slug = epic_dir.name
                 epic_meta = {}
@@ -2230,7 +2275,7 @@ def api_board_payload(board: Path) -> dict:
                         "reference": ref,
                         "id": f.stem,
                         "epic": epic_slug,
-                        "status": meta.get("status", "backlog"),
+                        "status": normalize_status(meta.get("status", "backlog")),
                         "title": meta.get("title", ""),
                         "note": meta.get("note", ""),
                         "is_rejected": is_rejected,

@@ -328,7 +328,7 @@ html, body {
   border-radius: var(--radius) var(--radius) 0 0;
 }
 .col-backlog .col-head { border-top: 3px solid var(--muted); }
-.col-in-progress .col-head { border-top: 3px solid var(--purple); }
+.col-build .col-head, .col-in-progress .col-head { border-top: 3px solid var(--purple); }
 .col-verify .col-head { border-top: 3px solid var(--amber); }
 .col-done .col-head { border-top: 3px solid var(--green); }
 .col-blocked .col-head { border-top: 3px solid var(--red); }

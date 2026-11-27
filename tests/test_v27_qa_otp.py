@@ -132,6 +132,11 @@ class TestGuardBlocksPasskeyAndKbQaReads(unittest.TestCase):
         self.assertIn("subagent: true", agy_txt)
         self.assertIn("mainAgent: false", agy_txt)
         self.assertIn("model: inherit", agy_txt)
+        self.assertIn("read_file", agy_txt)
+        self.assertIn("write_file", agy_txt)
+        self.assertIn("edit_file", agy_txt)
+        self.assertIn("run_command", agy_txt)
+        self.assertNotIn("call_mcp_tool", agy_txt)
         self.assertIn("QA_PASSKEY: __QA_PASSKEY__", agy_txt)
 
 

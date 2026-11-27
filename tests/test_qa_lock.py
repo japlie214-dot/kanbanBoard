@@ -19,15 +19,16 @@ from hooks import guard
 
 
 class TestDualModeMcp(unittest.TestCase):
-    def test_work_mode_includes_otp_gated_kanban_qa(self):
+    def test_work_mode_includes_otp_gated_kanban_qa_and_case(self):
         names = {t["name"] for t in mcp_server.tools_for_mode("work")}
         self.assertIn("kanban_qa", names)
+        self.assertIn("kanban_case", names)
         self.assertIn("kanban_move", names)
-        self.assertEqual(len(names), 7)
+        self.assertEqual(len(names), 8)
 
-    def test_qa_mode_exposes_only_qa_and_readonly_tools(self):
+    def test_qa_mode_exposes_only_qa_case_and_readonly_tools(self):
         names = {t["name"] for t in mcp_server.tools_for_mode("qa")}
-        self.assertEqual(names, {"kanban_board", "kanban_ticket", "kanban_qa"})
+        self.assertEqual(names, {"kanban_board", "kanban_ticket", "kanban_qa", "kanban_case"})
         self.assertNotIn("kanban_move", names)
         self.assertNotIn("kanban_update", names)
 

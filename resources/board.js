@@ -1,7 +1,8 @@
 (() => {
   "use strict";
 
-  const STATUSES = ["backlog", "in-progress", "verify", "done", "blocked"];
+  const STATUSES = ["backlog", "build", "verify", "done", "blocked"];
+  const normalizeStatus = (s) => (s === "in-progress" ? "build" : s);
   const PAGE_SIZE = 40;
   const DEFAULT_APPROVER = "Boss";
 
@@ -274,7 +275,7 @@
     const hideDone = $("f-hidedone").checked;
     const cols = STATUSES.filter((s) => !(hideDone && s === "done"));
     return `<div class="board-columns">` + cols.map((status) => {
-      const colItems = items.filter((t) => t.status === status);
+      const colItems = items.filter((t) => normalizeStatus(t.status) === status);
       const key = `${scopeKey}:${status}`;
       const limit = colLimits[key] || PAGE_SIZE;
       const shown = colItems.slice(0, limit);

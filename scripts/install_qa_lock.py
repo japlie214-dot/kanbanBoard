@@ -74,6 +74,11 @@ def render_kb_qa_agent(sec_file: Path, platform: str = "claude") -> str:
                 "subagent: true\n"
                 "mainAgent: false\n"
                 "model: inherit\n"
+                "tools:\n"
+                "  - read_file\n"
+                "  - write_file\n"
+                "  - edit_file\n"
+                "  - run_command\n"
                 "---\n"
             )
             return agy_fm + body

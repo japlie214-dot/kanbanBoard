@@ -92,9 +92,9 @@ class TestKanbanCore(unittest.TestCase):
         )
         ticket_path.write_text(valid_inprogress_content, encoding="utf-8")
 
-        # 5. Move to in-progress -> succeeds and atomically claims ticket
+        # 5. Move to build (with backward-compatible "in-progress" alias) -> succeeds and atomically claims ticket
         res = kb.api_move("demo/feature/T001", "in-progress", "Starting auth work", self.board, agent_id="agent-alpha")
-        self.assertEqual(res["to"], "in-progress")
+        self.assertEqual(res["to"], "build")
         self.assertIsNotNone(res.get("owner"))
         self.assertEqual(res["owner"]["agent"], "agent-alpha")
 
@@ -437,7 +437,7 @@ class TestKanbanCore(unittest.TestCase):
         kb.api_move(ref, "verify", "Ready for QA", board)
         qa = kb.api_qa_start(ref, board)
         rej = kb.api_qa_reject(ref, qa["qa_nonce"], "Found a bug in step A2", board)
-        self.assertEqual(rej["to"], "in-progress")
+        self.assertEqual(rej["to"], "build")
         self.assertIn("Found a bug in step A2", rej["note"])
 
     def test_lenient_execution_log_scaffolding_and_fuzzy_qa(self):

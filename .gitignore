@@ -13,6 +13,7 @@ Thumbs.db
 board/.lock
 board/.qa_nonces/
 board/.last_purge
+board/_cases/.last_archive
 
 # Upgrade bundles
 kanbanBoard-*-upgrade/

@@ -1,21 +1,11 @@
 ---
 name: kanban
-description: "Use when creating, claiming, updating, retiring, restoring, or verifying coding tasks on the central Kanban board."
+description: "Central Kanban workflow. Load when creating, claiming, updating, retiring, rehoming, or verifying tickets, or posting QA/discovery Cases."
 ---
-# Kanban (Caveman)
+# Kanban
 
-Rules:
-- Non-trivial work needs ticket first. Central board only; never create `board/` in app repo.
-- Never self-approve `done` (only `kb-qa` or human via web app). Never edit `board/` or call `kb.py qa` directly.
-- Never commit/push before ticket `done`.
-
-Flow:
-1. Check board: `kanban_board(view="overview", page=1, page_size=25)` (filter with `project`, `epic`, `status`, `q`; `include_retired=false` by default). Read `project.md`/`epic.md` via `kanban_doc` if unfamiliar.
-2. Create: `kanban_ticket(action="create", project, epic, title, outcome, prove, plan)` — simple steps (1-2 for quick fixes; add `[after:]`/`[when:]`/`[parallel]` only if real fork/parallel exists).
-3. Claim: `kanban_move(ref, status="in-progress", agent_id)` (auto-restores if retired).
-4. Update: `kanban_update(ref, checked_nodes, node_proofs, skip_nodes?, files?)`.
-5. Retire/Restore/Rehome: `kanban_ticket(action="retire", ref, reason)` moves non-done ticket back to `backlog` marked retired (auto hard-deletes after 120d). Use `action="restore"` to un-retire or `action="rehome", new_epic=...` to move epics.
-6. Verify: run `## Prove` (positive + negative check), then `kanban_move(ref, status="verify", note)`.
-7. QA: spawn `kb-qa` subagent (do NOT override `model`). Work on next ticket while QA runs.
-
-Tools: `kanban_board`, `kanban_ticket`, `kanban_move`, `kanban_update`, `kanban_doc`, `kanban_view`.
+1. **Orient**: read `project.md` (repo identity, verify commands, feature index, gotchas) and `epic.md` (shared contracts).
+2. **Plan**: create a ticket with concrete outcome, scope, and runnable `## Prove` command. Keep steps flat unless a real fork or parallel lane exists (for branching syntax, read `DAG-SYNTAX.md`).
+3. **Build**: claim `build`, write **Ponytail** minimal code (preserve validation, error handling, security), and prove positive + **Pluto** negative cases at the matching test rung (`unit`, `integration`, `component`, `e2e`). Prefer no new test over a mock-only test.
+4. **Verify**: move to `verify`, link discoveries or proof in a **Case** (`kanban_case`) when useful, and spawn `kb-qa` (keep default model).
+5. **Maintain**: retire obsolete tickets (`retire`; moves to `backlog`, auto-purges after 120d) and move cross-epic work with `rehome`.

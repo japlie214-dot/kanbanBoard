@@ -30,7 +30,9 @@ from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 import kb
+import kb_cases
 import kb_crud
+import kb_history
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 7890
@@ -196,7 +198,7 @@ def _normalize_tickets(raw_payload: dict[str, Any]) -> tuple[list[dict[str, Any]
                     "id": str(t.get("id") or ref.split("/")[-1]),
                     "project": pslug or ref.split("/")[0],
                     "epic": eslug,
-                    "status": str(t.get("status") or "backlog"),
+                    "status": kb.normalize_status(str(t.get("status") or "backlog")),
                     "title": str(t.get("title") or ""),
                     "agent": owner_name,
                     "lease_status": lease_status,
@@ -239,6 +241,7 @@ class BoardCache:
 
     def _refresh_locked(self, stamp: str):
         kb_crud.purge_expired_retired(self.board)
+        kb_cases.archive_stale_cases(self.board)
         raw = kb.api_board_payload(self.board)
         summaries, details = _normalize_tickets(raw)
         self._stamp = stamp
@@ -279,7 +282,7 @@ class BoardCache:
 
 
 class KanbanHandler(BaseHTTPRequestHandler):
-    server_version = "KanbanViewer/2.6"
+    server_version = "KanbanViewer/3.0"
     sys_version = ""
     timeout = 15
 
@@ -431,7 +434,7 @@ class KanbanHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "mode": "viewer+human-approve",
-                    "version": "2.6.0",
+                    "version": "3.0.0",
                     "port": self.server.server_address[1],
                 },
                 head,
@@ -441,6 +444,36 @@ class KanbanHandler(BaseHTTPRequestHandler):
             if qs.get("summary", ["0"])[0] in ("1", "true"):
                 return self._json(200, self.server.cache.get_summary_payload(), head)
             return self._json(200, self.server.cache.get_full_payload(), head)
+
+        if path == "/api/cases":
+            return self._json(
+                200,
+                kb_cases.api_case_list(
+                    self.server.board,
+                    ticket=(qs.get("ticket") or [None])[0],
+                    project=(qs.get("project") or [None])[0],
+                    epic=(qs.get("epic") or [None])[0],
+                    kind=(qs.get("kind") or [None])[0],
+                    page=int((qs.get("page") or ["1"])[0] or 1),
+                    page_size=int((qs.get("page_size") or ["20"])[0] or 20),
+                ),
+                head,
+            )
+
+        if path == "/api/case":
+            cid = (qs.get("id") or [""])[0].strip()
+            if not cid:
+                return self._json(400, {"ok": False, "error": "missing id"}, head)
+            try:
+                return self._json(200, kb_cases.api_case_show(cid, self.server.board), head)
+            except FileNotFoundError as e:
+                return self._json(404, {"ok": False, "error": str(e)}, head)
+
+        if path == "/api/history":
+            ref = (qs.get("ref") or [""])[0].strip()
+            if not ref:
+                return self._json(400, {"ok": False, "error": "missing ref"}, head)
+            return self._json(200, {"ok": True, "ref": ref, "history": kb_history.read_history(ref, self.server.board)}, head)
 
         if path == "/api/ticket":
             ref = (qs.get("ref") or [""])[0].strip()
@@ -518,7 +551,7 @@ def find_available_server(board: Path, preferred_port: int = DEFAULT_PORT, max_a
 def run_server(board: Path, port: int = DEFAULT_PORT, open_browser: bool = True, verbose: bool = False):
     server, bound_port = find_available_server(board, port, verbose=verbose)
     url = f"http://{HOST}:{bound_port}"
-    print(f"Kanban Board Viewer v2.6 running at: {url}")
+    print(f"Kanban Board Viewer v3.0 running at: {url}")
     print("Press Ctrl+C to stop.")
 
     if open_browser:
